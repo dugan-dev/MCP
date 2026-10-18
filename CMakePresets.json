@@ -1,0 +1,70 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "debug",
+      "binaryDir": "${sourceDir}/build/MCP-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install/debug",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/dependencies",
+        "UNIMEMORY_BACKEND": "standard",
+        "UNIMEMORY_STATISTICS": "OFF",
+        "UNIMEMORY_CHECKS": "AUTO"
+      }
+    },
+    {
+      "name": "release",
+      "binaryDir": "${sourceDir}/build/MCP-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install/release",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/dependencies",
+        "UNIMEMORY_BACKEND": "standard",
+        "UNIMEMORY_STATISTICS": "OFF",
+        "UNIMEMORY_CHECKS": "AUTO"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

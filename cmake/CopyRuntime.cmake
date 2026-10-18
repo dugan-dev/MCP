@@ -1,0 +1,17 @@
+file(LOCK "${MCP_RUNTIME_DESTINATION}/.mcp-runtime.lock" GUARD PROCESS TIMEOUT 120)
+string(REPLACE "|" ";" libraries "${MCP_DLLS}")
+foreach(library IN LISTS libraries)
+    get_filename_component(name "${library}" NAME)
+    file(COPY_FILE "${library}" "${MCP_RUNTIME_DESTINATION}/${name}" ONLY_IF_DIFFERENT)
+endforeach()
+if(EXISTS "${MCP_VCPKG_EXECUTABLE}")
+    string(REPLACE "|" ";" dependency_directories "${MCP_DEPENDENCY_BINS}")
+    list(REMOVE_DUPLICATES dependency_directories)
+    foreach(dependency_directory IN LISTS dependency_directories)
+        if(IS_DIRECTORY "${dependency_directory}")
+            execute_process(COMMAND "${MCP_VCPKG_EXECUTABLE}" z-applocal
+                "--target-binary=${MCP_EXECUTABLE}" "--installed-bin-dir=${dependency_directory}"
+                COMMAND_ERROR_IS_FATAL ANY)
+        endif()
+    endforeach()
+endif()

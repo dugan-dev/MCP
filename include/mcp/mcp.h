@@ -1,0 +1,9 @@
+#pragma once
+#include <mcp/auth.h>
+#include <mcp/client.h>
+#include <mcp/extensions.h>
+#include <mcp/features.h>
+#include <mcp/http.h>
+#include <mcp/schema.h>
+#include <mcp/sse.h>
+#include <mcp/stdio.h>

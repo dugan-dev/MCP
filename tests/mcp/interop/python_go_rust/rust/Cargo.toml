@@ -1,0 +1,12 @@
+[package]
+name = "mcp-interop-audit"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+rmcp = { path = "@RUST_SDK_CRATE@", default-features = false, features = ["client", "server", "transport-io", "transport-child-process", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "io-std", "net"] }
+serde_json = "1"
+futures = "0.3"
+axum = "0.8"
+anyhow = "1"

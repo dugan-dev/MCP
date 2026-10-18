@@ -1,0 +1,52 @@
+Standalone MCP extraction: the original Kit notice below is retained for attribution.
+This package contains the generic MCP implementation only. Current official UniMemory
+revision: 3dbe431a6c9a4bb5cf0aebd9e472baebfd96f925 (see PROVENANCE.md).
+
+DearAgentKit contains independent LLM and MCP modules and the MIT-licensed UniMemory dependency.
+The LLM and MCP implementations were adapted from the author's earlier projects.
+Original licenses and notices are retained in licenses/ and external/unimemory/.
+See docs/sources.json for exact commits and docs/dependencies.md for dependency licenses.
+
+MCP implementation attribution:
+DearAgentKit 0.1.0 — MCP module
+
+This module retains the original cpp-mcp MIT license and attribution.
+Upstream reference: https://github.com/hkr04/cpp-mcp (13a8bef).
+Adapted C++ implementation and tests are provided under the module MIT license.
+
+The MIT-licensed UniMemory source dependency originates from
+7e4b486af1813820b73339fa70884338ae76201f.
+https://github.com/dugan-dev/UniMemory
+
+Official protocol schema fixture:
+tests/mcp/fixtures/mcp-2026-07-28.schema.json
+Source: https://github.com/modelcontextprotocol/modelcontextprotocol/blob/046fa30efd374370afb87ef830bd788eac5f217e/schema/2026-07-28/schema.json
+SHA-256: ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203
+The fixture is copied without modification. The private generated
+`src/mcp/input_schemas.h` extracts six input/output definitions and their local
+references from this fixture, removes only descriptive metadata, and is
+redistributed under the same upstream license terms. The fixture's
+upstream licensing transition notice and
+Apache-2.0/MIT license terms are retained in tests/mcp/fixtures/licenses/MCP-LICENSE.
+The protocol specification is referenced, not reproduced as documentation.
+
+Architectural and test-scenario references (independent C++ implementations):
+Official Python SDK: f1b6589088534632fef92238ee9750951e3c0185
+https://github.com/modelcontextprotocol/python-sdk
+Official TypeScript SDK: dd22ba25ddbe7cd8822e1fe9c738a974996a28f6
+https://github.com/modelcontextprotocol/typescript-sdk
+SDK source files are not bundled or copied into runtime C++ code.
+Interop scripts are original tests using the SDKs as external test dependencies.
+
+Package-managed dependencies retain their own license terms:
+nlohmann/json and mimalloc: MIT
+libcurl: curl license
+Boost.Asio, Beast, Process V2 and jsoncons: BSL-1.0
+OpenSSL 3: Apache-2.0
+GoogleTest (tests only): BSD-3-Clause
+jemalloc (optional): BSD-2-Clause
+No third-party binaries are bundled by the source package. A distributor of
+native dependency binaries must include those packages' notices and licenses.
+
+tests/mcp/fixtures/localhost.crt and localhost.key are a deliberately public,
+generated self-signed test identity, not production credentials.

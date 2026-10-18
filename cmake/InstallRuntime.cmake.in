@@ -1,0 +1,95 @@
+# Stop at system DLLs before traversing their private OS dependency graph.
+# Escape the configured root so similarly named application directories remain
+# eligible for collection. Filter paths retain directory casing on Windows.
+include("@MCP_RUNTIME_PATHS_FILE@")
+mcp_runtime_system_root_regex(mcp_runtime_system_root_regex "@MCP_SYSTEM_ROOT_LOWER@")
+file(GET_RUNTIME_DEPENDENCIES
+    EXECUTABLES @MCP_RUNTIME_EXECUTABLES@
+    LIBRARIES @MCP_RUNTIME_LIBRARIES@
+    DIRECTORIES @MCP_RUNTIME_DIRECTORIES@
+    RESOLVED_DEPENDENCIES_VAR mcp_runtime_resolved
+    UNRESOLVED_DEPENDENCIES_VAR mcp_runtime_unresolved
+    CONFLICTING_DEPENDENCIES_PREFIX mcp_runtime_conflicts
+    PRE_EXCLUDE_REGEXES "api-ms-" "ext-ms-"
+    POST_EXCLUDE_REGEXES "${mcp_runtime_system_root_regex}")
+if(mcp_runtime_unresolved)
+    message(FATAL_ERROR "MCP runtime dependencies were not found: ${mcp_runtime_unresolved}")
+endif()
+# Shared targets can stage the same dependency beside multiple roots. CMake
+# reports those paths as conflicting even when they contain identical bytes.
+foreach(mcp_runtime_filename IN LISTS mcp_runtime_conflicts_FILENAMES)
+    set(mcp_runtime_candidates "${mcp_runtime_conflicts_${mcp_runtime_filename}}")
+    list(SORT mcp_runtime_candidates)
+    list(GET mcp_runtime_candidates 0 mcp_runtime_representative)
+    file(SHA256 "${mcp_runtime_representative}" mcp_runtime_expected_hash)
+    foreach(mcp_runtime_candidate IN LISTS mcp_runtime_candidates)
+        file(SHA256 "${mcp_runtime_candidate}" mcp_runtime_candidate_hash)
+        if(NOT mcp_runtime_candidate_hash STREQUAL mcp_runtime_expected_hash)
+            message(FATAL_ERROR
+                "MCP runtime dependency ${mcp_runtime_filename} has different contents at conflicting paths: ${mcp_runtime_candidates}")
+        endif()
+    endforeach()
+    list(APPEND mcp_runtime_resolved "${mcp_runtime_representative}")
+endforeach()
+list(REMOVE_DUPLICATES mcp_runtime_resolved)
+set(mcp_runtime_runtime_directories @MCP_RUNTIME_DIRECTORIES@)
+set(mcp_runtime_extra_licenses @MCP_RUNTIME_LICENSE_ARGUMENTS@)
+foreach(mcp_runtime_license IN LISTS mcp_runtime_extra_licenses)
+    file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_DATADIR@/licenses/MCP/dependencies/custom"
+        TYPE FILE FILES "${mcp_runtime_license}")
+endforeach()
+foreach(mcp_runtime_dependency IN LISTS mcp_runtime_resolved)
+    file(TO_CMAKE_PATH "${mcp_runtime_dependency}" mcp_runtime_dependency_path)
+    string(TOLOWER "${mcp_runtime_dependency_path}" mcp_runtime_dependency_lower)
+    string(FIND "${mcp_runtime_dependency_lower}" "@MCP_SYSTEM_ROOT_LOWER@/" mcp_runtime_system_position)
+    if(mcp_runtime_system_position EQUAL 0)
+        continue()
+    endif()
+    get_filename_component(mcp_runtime_filename "${mcp_runtime_dependency}" NAME)
+    string(TOLOWER "${mcp_runtime_filename}" mcp_runtime_filename)
+    if(mcp_runtime_filename MATCHES "^mcpd?[.]dll$")
+        continue()
+    endif()
+    set(mcp_runtime_package "")
+    if(mcp_runtime_filename MATCHES "^unimemoryd?[.]dll$")
+        set(mcp_runtime_package UniMemory)
+    elseif(mcp_runtime_filename MATCHES "curl")
+        set(mcp_runtime_package curl)
+    elseif(mcp_runtime_filename MATCHES "mimalloc")
+        set(mcp_runtime_package mimalloc)
+    elseif(mcp_runtime_filename MATCHES "jemalloc")
+        set(mcp_runtime_package jemalloc)
+    elseif(mcp_runtime_filename MATCHES "^(zd?|zlib1)[.]dll$")
+        set(mcp_runtime_package zlib)
+    elseif(mcp_runtime_filename MATCHES "^(lib)?(ssl|crypto)")
+        set(mcp_runtime_package openssl)
+    elseif(mcp_runtime_filename MATCHES "^boost_process")
+        set(mcp_runtime_package boost-process)
+    elseif(mcp_runtime_filename MATCHES "brotli")
+        set(mcp_runtime_package brotli)
+    elseif(mcp_runtime_filename MATCHES "zstd")
+        set(mcp_runtime_package zstd)
+    elseif(mcp_runtime_filename MATCHES "nghttp2")
+        set(mcp_runtime_package nghttp2)
+    endif()
+    set(mcp_runtime_license_paths "")
+    foreach(mcp_runtime_directory IN LISTS mcp_runtime_runtime_directories)
+        list(APPEND mcp_runtime_license_paths
+            "${mcp_runtime_directory}/../share/${mcp_runtime_package}"
+            "${mcp_runtime_directory}/../../share/${mcp_runtime_package}"
+            "${mcp_runtime_directory}/../share/licenses/${mcp_runtime_package}")
+    endforeach()
+    if(mcp_runtime_package STREQUAL "UniMemory")
+        list(APPEND mcp_runtime_license_paths "${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_DATADIR@/licenses/UniMemory")
+    endif()
+    find_file(mcp_runtime_copyright NAMES copyright LICENSE PATHS ${mcp_runtime_license_paths} NO_DEFAULT_PATH NO_CACHE)
+    if(mcp_runtime_package AND mcp_runtime_copyright)
+        file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_DATADIR@/licenses/MCP/dependencies/${mcp_runtime_package}"
+            TYPE FILE FILES "${mcp_runtime_copyright}")
+    elseif(NOT mcp_runtime_extra_licenses)
+        message(FATAL_ERROR "License for ${mcp_runtime_filename} was not found. Supply MCP_RUNTIME_LICENSE_FILES.")
+    endif()
+    unset(mcp_runtime_copyright)
+    file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_BINDIR@"
+        TYPE SHARED_LIBRARY FILES "${mcp_runtime_dependency}")
+endforeach()

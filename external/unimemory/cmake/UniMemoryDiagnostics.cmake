@@ -1,0 +1,87 @@
+option(UNIMEMORY_DIAGNOSTIC_IPO "Enable IPO only in this controlled diagnostic build" OFF)
+option(UNIMEMORY_DIAGNOSTIC_PIC "Build diagnostic consumers with PIC" ON)
+option(UNIMEMORY_DIAGNOSTIC_ADAPTER_EXTENSIONS "Keep GNU extensions in diagnostic adapter controls" ON)
+option(UNIMEMORY_DIAGNOSTIC_ALIGN_LOOPS "Align GNU diagnostic loops to 64 bytes" OFF)
+set_property(TARGET UniMemory PROPERTY INTERFACE_POSITION_INDEPENDENT_CODE ${UNIMEMORY_DIAGNOSTIC_PIC})
+add_library(UniMemoryDiagnosticAdapters STATIC benchmarks/diagnostics/adapters.cpp)
+set_property(TARGET UniMemoryDiagnosticAdapters PROPERTY CXX_EXTENSIONS ${UNIMEMORY_DIAGNOSTIC_ADAPTER_EXTENSIONS})
+add_executable(UniMemoryDiagnostic
+    benchmarks/diagnostics/main.cpp
+    benchmarks/diagnostics/hotpath.cpp
+    benchmarks/diagnostics/statistics.cpp
+    benchmarks/diagnostics/backend.cpp
+    benchmarks/diagnostics/api.cpp)
+foreach(probe IN ITEMS UniMemoryDiagnosticAdapters UniMemoryDiagnostic)
+    target_compile_features(${probe} PRIVATE cxx_std_20)
+    target_link_libraries(${probe} PRIVATE UniMemory::UniMemory Threads::Threads)
+    if(UNIMEMORY_WITH_MIMALLOC)
+        target_compile_definitions(${probe} PRIVATE UNIMEMORY_BENCH_MIMALLOC UNIMEMORY_WITH_MIMALLOC)
+        target_include_directories(${probe} PRIVATE "${UNIMEMORY_MIMALLOC_INCLUDE_DIR}")
+        target_link_libraries(${probe} PRIVATE ${UNIMEMORY_MIMALLOC_TARGET})
+    endif()
+    if(UNIMEMORY_WITH_JEMALLOC)
+        target_compile_definitions(${probe} PRIVATE UNIMEMORY_BENCH_JEMALLOC UNIMEMORY_WITH_JEMALLOC)
+        target_link_libraries(${probe} PRIVATE unimemory_jemalloc)
+    endif()
+endforeach()
+if(UNIMEMORY_DIAGNOSTIC_ALIGN_LOOPS)
+    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        message(FATAL_ERROR "The loop-placement control is GNU-only")
+    endif()
+    target_compile_options(UniMemoryDiagnostic PRIVATE -falign-loops=64)
+endif()
+target_link_libraries(UniMemoryDiagnostic PRIVATE UniMemoryDiagnosticAdapters ${CMAKE_DL_LIBS})
+if(UNIMEMORY_BUILD_TESTS AND (NOT DEFINED BUILD_TESTING OR BUILD_TESTING))
+    add_test(NAME UniMemory.diagnostic.clock_selector
+        COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:UniMemoryDiagnostic>"
+            "-DBACKEND=${UNIMEMORY_BACKEND}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostic_cli.cmake")
+endif()
+if(WIN32)
+    target_link_libraries(UniMemoryDiagnostic PRIVATE psapi)
+    target_link_options(UniMemoryDiagnostic PRIVATE /MAP)
+endif()
+if(UNIMEMORY_DIAGNOSTIC_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT supported OUTPUT explanation LANGUAGES CXX)
+    if(NOT supported)
+        message(FATAL_ERROR "Requested diagnostic IPO unsupported: ${explanation}")
+    endif()
+    foreach(probe IN ITEMS UniMemoryDiagnosticAdapters UniMemoryDiagnostic)
+        set_property(TARGET ${probe} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    endforeach()
+
+endif()
+# Embed the generated record in the object file, so reconfiguration cannot certify
+# an older executable. The read-only --profile command returns this exact record.
+set(_unimemory_diagnostic_effective_ipo "$<BOOL:$<TARGET_PROPERTY:UniMemoryDiagnostic,INTERPROCEDURAL_OPTIMIZATION>>")
+foreach(_unimemory_config IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${_unimemory_config}" _unimemory_config_upper)
+    get_target_property(_unimemory_config_ipo UniMemoryDiagnostic "INTERPROCEDURAL_OPTIMIZATION_${_unimemory_config_upper}")
+    if(NOT _unimemory_config_ipo STREQUAL "_unimemory_config_ipo-NOTFOUND")
+        set(_unimemory_diagnostic_effective_ipo "$<IF:$<CONFIG:${_unimemory_config}>,$<BOOL:${_unimemory_config_ipo}>,${_unimemory_diagnostic_effective_ipo}>")
+    endif()
+endforeach()
+set(_unimemory_diagnostic_config_flags "")
+set(_unimemory_diagnostic_link_flags "")
+foreach(_unimemory_config IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${_unimemory_config}" _unimemory_config_upper)
+    string(APPEND _unimemory_diagnostic_link_flags "$<$<CONFIG:${_unimemory_config}>:${CMAKE_EXE_LINKER_FLAGS_${_unimemory_config_upper}}>")
+    string(APPEND _unimemory_diagnostic_config_flags "$<$<CONFIG:${_unimemory_config}>:${CMAKE_CXX_FLAGS_${_unimemory_config_upper}}>")
+endforeach()
+set(_unimemory_diagnostic_record
+    "compiler=${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\nconfiguration=$<CONFIG>\ncore=header-only\nbackend=${UNIMEMORY_BACKEND}\nstatistics=${UNIMEMORY_STATISTICS}\nperformance_tests=${UNIMEMORY_PERFORMANCE_TESTS}\nchecks=${UNIMEMORY_CHECKS}\nipo=$<IF:${_unimemory_diagnostic_effective_ipo},ON,OFF>\ndiagnostic_ipo=${UNIMEMORY_DIAGNOSTIC_IPO}\npic=${UNIMEMORY_DIAGNOSTIC_PIC}\nadapter_extensions=${UNIMEMORY_DIAGNOSTIC_ADAPTER_EXTENSIONS}\nalign_loops=${UNIMEMORY_DIAGNOSTIC_ALIGN_LOOPS}\nsanitizer=${UNIMEMORY_SANITIZER}\ncoverage=${UNIMEMORY_COVERAGE}\nflags=${CMAKE_CXX_FLAGS}\nconfiguration_flags=${_unimemory_diagnostic_config_flags}\ncompile_options=$<TARGET_GENEX_EVAL:UniMemoryDiagnostic,$<TARGET_PROPERTY:UniMemoryDiagnostic,COMPILE_OPTIONS>>\ncompile_definitions=$<TARGET_GENEX_EVAL:UniMemoryDiagnostic,$<TARGET_PROPERTY:UniMemoryDiagnostic,COMPILE_DEFINITIONS>>\nadapter_compile_options=$<TARGET_GENEX_EVAL:UniMemoryDiagnosticAdapters,$<TARGET_PROPERTY:UniMemoryDiagnosticAdapters,COMPILE_OPTIONS>>\nadapter_compile_definitions=$<TARGET_GENEX_EVAL:UniMemoryDiagnosticAdapters,$<TARGET_PROPERTY:UniMemoryDiagnosticAdapters,COMPILE_DEFINITIONS>>\nmsvc_runtime=$<TARGET_GENEX_EVAL:UniMemoryDiagnostic,$<TARGET_PROPERTY:UniMemoryDiagnostic,MSVC_RUNTIME_LIBRARY>>\nlink_flags=${CMAKE_EXE_LINKER_FLAGS}\nconfiguration_link_flags=${_unimemory_diagnostic_link_flags}\ntarget_ipo=$<TARGET_PROPERTY:UniMemoryDiagnostic,INTERPROCEDURAL_OPTIMIZATION>\nrelease_ipo=$<TARGET_PROPERTY:UniMemoryDiagnostic,INTERPROCEDURAL_OPTIMIZATION_RELEASE>\nlink_options=$<TARGET_GENEX_EVAL:UniMemoryDiagnostic,$<TARGET_PROPERTY:UniMemoryDiagnostic,LINK_OPTIONS>>\n")
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/diagnostic-build-$<CONFIG>.txt"
+    CONTENT "${_unimemory_diagnostic_record}" TARGET UniMemoryDiagnostic)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/diagnostic/$<CONFIG>/diagnostic-profile.h"
+    CONTENT "#pragma once\n#define UNIMEMORY_DIAGNOSTIC_BUILD_PROFILE R\"UMPROFILE(${_unimemory_diagnostic_record})UMPROFILE\"\n"
+    TARGET UniMemoryDiagnostic)
+target_include_directories(UniMemoryDiagnostic PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/diagnostic/$<CONFIG>")
+unset(_unimemory_diagnostic_record)
+unset(_unimemory_diagnostic_config_flags)
+unset(_unimemory_config)
+unset(_unimemory_config_upper)
+unset(_unimemory_diagnostic_link_flags)
+unset(_unimemory_diagnostic_effective_ipo)
+unset(_unimemory_config_ipo)

@@ -1,0 +1,17 @@
+# Preserve imported source and byte-oriented fixture provenance on every checkout.
+* -text
+* whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Exact upstream fixtures: trailing line breaks are intentional source bytes.
+tests/mcp/fixtures/mcp-2026-07-28.schema.json whitespace=-blank-at-eof,cr-at-eol
+tests/mcp/fuzz/corpus/sse/event.txt whitespace=-blank-at-eof,cr-at-eol
+# A blank unified-diff context line contains a required single space.
+ports/boost-process/*.patch whitespace=-blank-at-eol,cr-at-eol
+# New community and CI files use LF; imported source bytes above stay unchanged.
+.github/** text eol=lf
+CONTRIBUTING.md text eol=lf
+SECURITY.md text eol=lf
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+*.png binary
+*.jpg binary
+*.zip binary

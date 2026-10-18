@@ -1,0 +1,126 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: ${{ matrix.os }} / ${{ matrix.preset }} / ${{ matrix.linkage }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+        preset: [debug, release]
+        linkage: [static, shared]
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/build/vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/vcpkg-binary-cache,readwrite
+      VCPKG_DISABLE_METRICS: '1'
+    steps:
+      - name: Check out MCP
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned dependency baseline
+        id: dependencies
+        run: |
+          $manifest = Get-Content -LiteralPath vcpkg.json -Raw | ConvertFrom-Json
+          if ($manifest.'builtin-baseline' -notmatch '^[0-9a-fA-F]{40}$') {
+            throw 'vcpkg.json must select a full pinned builtin-baseline commit'
+          }
+          "baseline=$($manifest.'builtin-baseline')" >> $env:GITHUB_OUTPUT
+          $architecture = if ($env:RUNNER_ARCH -eq 'ARM64') { 'arm64' } else { 'x64' }
+          $platform = switch ($env:RUNNER_OS) {
+            'Windows' { 'windows' }
+            'Linux' { 'linux' }
+            'macOS' { 'osx' }
+            default { throw "Unsupported runner: $env:RUNNER_OS" }
+          }
+          "MCP_CI_TRIPLET=$architecture-$platform" >> $env:GITHUB_ENV
+
+      - name: Check out the manifest's vcpkg revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ steps.dependencies.outputs.baseline }}
+          path: build/vcpkg
+          persist-credentials: false
+
+      - name: Restore vcpkg binary packages
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ github.workspace }}/build/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Bootstrap vcpkg
+        run: |
+          New-Item -ItemType Directory -Path './build/vcpkg-binary-cache' -Force | Out-Null
+          if ($IsWindows) {
+            & ./build/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          } else {
+            & ./build/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Select Python for the synthetic subprocess tests
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Configure the existing preset
+        run: |
+          $arguments = @('--preset', '${{ matrix.preset }}', "-DVCPKG_TARGET_TRIPLET=$env:MCP_CI_TRIPLET")
+          $shared = if ('${{ matrix.linkage }}' -eq 'shared') { 'ON' } else { 'OFF' }
+          $arguments += "-DBUILD_SHARED_LIBS=$shared"
+          if ($IsWindows) {
+            $arguments += @('-G', 'Visual Studio 17 2022', '-A', 'x64')
+          } else {
+            $arguments += @('-G', 'Ninja')
+          }
+          & cmake @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }} --parallel 4
+
+      - name: Run the complete configured test suite
+        run: ctest --preset ${{ matrix.preset }} --parallel 4 --output-on-failure --no-tests=error
+
+      - name: Install and run consumers outside the source build
+        run: |
+          python .github/scripts/installed_consumer.py --preset '${{ matrix.preset }}' --linkage '${{ matrix.linkage }}' --triplet "$env:MCP_CI_TRIPLET"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.preset }}-${{ matrix.linkage }}
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            build/MCP-*/CMakeCache.txt
+            build/MCP-*/CMakeFiles/CMakeConfigureLog.yaml
+            build/MCP-*/Testing/Temporary/LastTest.log
+            build/MCP-*/Testing/Temporary/LastTestsFailed.log
+            build/MCP-*/vcpkg-manifest-install.log
+            build/ci-consumer-*/CMakeCache.txt
+            build/ci-consumer-*/CMakeFiles/CMakeConfigureLog.yaml

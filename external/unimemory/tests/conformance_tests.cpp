@@ -1,0 +1,301 @@
+#include "compiled-test-config.h"
+#include <unimem/all.h>
+
+#include <array>
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <climits>
+#include <cstring>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <memory_resource>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace {
+
+void check(bool condition, const char* message) {
+  if (!condition) {
+    throw std::runtime_error(message);
+  }
+}
+
+template <class Exception, class F>
+void check_throws(F&& function, const char* message) {
+  try {
+    function();
+  } catch (const Exception&) {
+    return;
+  }
+  throw std::runtime_error(message);
+}
+
+unimem::detail::Backend parse_backend(const std::string& name) {
+  if (name == "standard") {
+    return unimem::detail::Backend::Standard;
+  }
+  if (name == "mimalloc") {
+    return unimem::detail::Backend::Mimalloc;
+  }
+  if (name == "jemalloc") {
+    return unimem::detail::Backend::Jemalloc;
+  }
+  throw std::invalid_argument("unknown backend");
+}
+
+bool aligned(const void* pointer, std::size_t alignment) {
+  return reinterpret_cast<std::uintptr_t>(pointer) % alignment == 0;
+}
+
+struct alignas(256) WideObject {
+  int value;
+};
+
+struct ThrowingObject {
+  ThrowingObject() { throw std::runtime_error("constructor"); }
+};
+
+void smoke(unimem::detail::Backend backend) {
+  unimem::Memory& memory = compiled_test::global();
+  check(unimem::detail::build_backend == backend, "backend identity");
+  auto* object = memory.create<WideObject>();
+  check(aligned(object, alignof(WideObject)), "object alignment");
+  object->value = 91;
+  check(object->value == 91, "object value");
+  memory.destroy(object);
+  auto unique = memory.make_unique<int>(17);
+  check(*unique == 17, "unique object");
+  unique.reset();
+  auto array = memory.make_unique_array<int>(33);
+  for (std::size_t i = 0; i < 33; ++i) {
+    array[i] = static_cast<int>(i);
+  }
+  check(array[32] == 32, "unique array");
+  array.reset();
+  auto shared = memory.make_shared<int>(23);
+  check(*shared == 23, "shared object");
+  shared.reset();
+
+  {
+    std::vector<int, unimem::Allocator<int>> ordinary(memory.allocator<int>());
+    std::pmr::vector<int> polymorphic(memory.resource());
+    for (int i = 0; i < 100; ++i) {
+      ordinary.push_back(i);
+      polymorphic.push_back(i * 2);
+    }
+    check(ordinary[99] == 99 && polymorphic[99] == 198, "container content");
+  }
+
+  auto stats = memory.statistics();
+  check((!compiled_test::tracking() || (compiled_test::tracking())) && (!compiled_test::tracking() || (stats.live_bytes == 0)) &&
+            (!compiled_test::tracking() || (stats.allocations > 0)),
+        "request statistics");
+  {
+    unimem::Heap arena = compiled_test::heap(compiled_test::heap_mode);
+    auto& scoped = arena;
+    auto block = scoped.make_block(256, 64);
+    check(block.size() == 256 && aligned(block.data(), 64), "arena block");
+    auto inside = scoped.make_unique<int>(29);
+    check(*inside == 29, "arena object");
+    inside.reset();
+    block.resize(0);
+    check((!compiled_test::tracking() || (scoped.statistics().live_bytes == 0)), "arena lifetime");
+  }
+
+  unimem::Memory::config(10);
+  unimem::Memory::config(0);
+  unimem::Memory::config(-1);
+  check_throws<std::invalid_argument>([] { unimem::Memory::config(-2); }, "invalid release delay");
+  if constexpr (LONG_MAX < std::numeric_limits<std::int64_t>::max()) {
+    check_throws<std::invalid_argument>([] { unimem::Memory::config(std::numeric_limits<std::int64_t>::max()); }, "release delay overflow");
+  }
+}
+
+void boundaries() {
+  unimem::Memory& memory = compiled_test::global();
+  check(memory.allocate(0) == nullptr, "zero size");
+#if UNIMEMORY_CHECKS
+  check_throws<std::invalid_argument>([&] { memory.allocate(4, 3); }, "invalid alignment");
+  check_throws<std::invalid_argument>([&] { memory.allocate(0, 0); }, "zero alignment");
+#endif
+  check_throws<std::length_error>([&] { memory.allocate_objects<std::uint64_t>(std::numeric_limits<std::size_t>::max()); }, "object count overflow");
+  check_throws<std::runtime_error>([&] { memory.create<ThrowingObject>(); }, "constructor exception");
+  check((!compiled_test::tracking() || (memory.statistics().live_bytes == 0)), "constructor rollback");
+
+  auto block = memory.make_block(17, 256);
+  std::memset(block.data(), 0x5A, block.size());
+  try {
+    block.resize(std::numeric_limits<std::size_t>::max());
+  } catch (const std::bad_alloc&) {}
+  check(block.size() == 17 && aligned(block.data(), 256), "failed resize retained block");
+  const auto* bytes = static_cast<const unsigned char*>(block.data());
+  for (std::size_t i = 0; i < 17; ++i) {
+    check(bytes[i] == 0x5A, "failed resize retained bytes");
+  }
+  block.resize(0);
+  check((!compiled_test::tracking() || (memory.statistics().live_bytes == 0)), "all bytes released");
+
+  unimem::Heap arena = unimem::Heap();
+  auto* pointer = arena.allocate_zeroed(33, 64);
+  for (std::size_t i = 0; i < 33; ++i) {
+    check(static_cast<unsigned char*>(pointer)[i] == 0, "arena zeroing");
+  }
+  arena.deallocate(pointer, 33, 64);
+}
+
+void matrix(unsigned index) {
+  check(index < 240, "case index");
+  constexpr std::array<std::size_t, 8> sizes{0, 1, 7, 16, 64, 512, 4096, 65536};
+  constexpr std::array<std::size_t, 5> alignments{1, 8, 16, 64, 256};
+  const auto size = sizes[index % sizes.size()];
+  const auto alignment = alignments[(index / sizes.size()) % alignments.size()];
+  const auto path = index / (sizes.size() * alignments.size());
+  const bool use_arena = path >= 3;
+  const bool zeroed = path == 1 || path == 4;
+  const bool owned = path == 2 || path == 5;
+  const bool tracked = use_arena ? (compiled_test::supports_statistics && index % 4 == 0) : compiled_test::supports_statistics;
+
+  std::unique_ptr<unimem::Heap> heap;
+  if (use_arena) {
+    heap.reset(new unimem::Heap(compiled_test::heap(tracked ? compiled_test::heap_mode : unimem::StatisticsMode::Disabled)));
+  }
+  unimem::Memory& target = use_arena ? static_cast<unimem::Memory&>(*heap) : static_cast<unimem::Memory&>(compiled_test::global());
+
+  // Every registered case is a repeated allocation/reallocation/free workload.
+  for (unsigned cycle = 0; cycle < 64; ++cycle) {
+    const auto grown = size + 13 + cycle % 3;
+    if (owned) {
+      std::vector<unimem::OwnedBlock> blocks;
+      blocks.reserve(8);
+      for (unsigned slot = 0; slot < 8; ++slot) {
+        blocks.emplace_back(target.make_block(size, alignment));
+        auto& block = blocks.back();
+        check(block.size() == size, "block size");
+        if (size != 0) {
+          check(aligned(block.data(), alignment), "block alignment");
+          std::memset(block.data(), 0x5A, size);
+        }
+        block.resize(grown);
+        check(block.size() == grown && aligned(block.data(), alignment), "grown block");
+        const auto* data = static_cast<const unsigned char*>(block.data());
+        for (std::size_t i = 0; i < size; ++i) {
+          check(data[i] == 0x5A, "block preservation");
+        }
+      }
+    } else {
+      std::array<void*, 8> pointers{};
+      for (auto& pointer : pointers) {
+        pointer = zeroed ? target.allocate_zeroed(size, alignment) : target.allocate(size, alignment);
+        if (size == 0) {
+          check(pointer == nullptr, "empty allocation");
+        } else {
+          check(pointer != nullptr && aligned(pointer, alignment), "allocation alignment");
+          if (zeroed) {
+            const auto* data = static_cast<const unsigned char*>(pointer);
+            for (std::size_t i = 0; i < size; ++i) {
+              check(data[i] == 0, "zeroed allocation");
+            }
+          }
+          std::memset(pointer, 0x5A, size);
+        }
+      }
+      for (auto& pointer : pointers) {
+        pointer = zeroed ? target.reallocate_zeroed(pointer, size, grown, alignment) : target.reallocate(pointer, size, grown, alignment);
+        check(pointer != nullptr && aligned(pointer, alignment), "reallocation alignment");
+        const auto* data = static_cast<const unsigned char*>(pointer);
+        for (std::size_t i = 0; i < size; ++i) {
+          check(data[i] == 0x5A, "reallocation preservation");
+        }
+        if (zeroed) {
+          for (std::size_t i = size; i < grown; ++i) {
+            check(data[i] == 0, "zeroed growth");
+          }
+        }
+      }
+      for (auto* pointer : pointers) {
+        target.deallocate(pointer, grown, alignment);
+      }
+    }
+    if (tracked) {
+      check((!compiled_test::tracking() || (target.statistics().live_bytes == 0)), "matrix leaked requested bytes");
+    }
+  }
+}
+
+void stress() {
+  for (bool dedicated : {false, true}) {
+
+    std::unique_ptr<unimem::Heap> heap;
+    if (dedicated) {
+      heap.reset(new unimem::Heap(compiled_test::heap(compiled_test::heap_mode)));
+    }
+    unimem::Memory& target = dedicated ? static_cast<unimem::Memory&>(*heap) : static_cast<unimem::Memory&>(compiled_test::global());
+    std::atomic<bool> okay{true};
+    std::array<std::thread, 8> workers;
+    for (unsigned worker = 0; worker < workers.size(); ++worker) {
+      workers[worker] = std::thread([&, worker] {
+        try {
+          std::vector<int, unimem::Allocator<int>> values(target.allocator<int>());
+          for (unsigned i = 0; i < 5000; ++i) {
+            const std::size_t size = 1 + (i * 37 + worker * 13) % 4096;
+            const std::size_t alignment = std::size_t{1} << (3 + (i + worker) % 6);
+            auto* block = target.allocate(size, alignment);
+            check(aligned(block, alignment), "stress alignment");
+            std::memset(block, 0xA5, size);
+            auto* next = target.reallocate(block, size, size + 19, alignment);
+            check(static_cast<unsigned char*>(next)[0] == 0xA5, "stress preservation");
+            target.deallocate(next, size + 19, alignment);
+            values.push_back(static_cast<int>(i));
+            if (values.size() > 64) {
+              values.clear();
+            }
+          }
+        } catch (...) {
+          okay.store(false, std::memory_order_relaxed);
+        }
+      });
+    }
+    for (auto& worker : workers) {
+      worker.join();
+    }
+    check(okay.load(std::memory_order_relaxed), "stress worker failed");
+    const auto stats = target.statistics();
+    check(compiled_test::tracking() == compiled_test::supports_statistics &&
+              (!compiled_test::tracking() || ((!compiled_test::tracking() || (stats.live_bytes == 0 && stats.peak_live_bytes > 0)))),
+          "stress statistics");
+  }
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  try {
+    if (argc < 3) {
+      throw std::invalid_argument("mode backend [index]");
+    }
+    const auto backend = parse_backend(argv[2]);
+    const std::string mode = argv[1];
+    compiled_test::test_configuration(backend, compiled_test::global_mode);
+    if (mode == "smoke") {
+      smoke(backend);
+    } else if (mode == "boundary") {
+      boundaries();
+    } else if (mode == "stress") {
+      stress();
+    } else if (mode == "matrix" && argc == 4) {
+      const auto index = std::stoul(argv[3]);
+      check(index < 240, "case index exceeds matrix");
+      matrix(static_cast<unsigned>(index));
+    } else {
+      throw std::invalid_argument("invalid test mode");
+    }
+    return 0;
+  } catch (const std::exception& error) {
+    std::cerr << "UniMemory conformance failure: " << error.what() << '\n';
+    return 1;
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "protocol": "2026-07-28",
+  "python": {
+    "repository": "https://github.com/modelcontextprotocol/python-sdk",
+    "commit": "2af9e3089ac66b35c1550c500aae86a82efb1e17"
+  },
+  "go": {
+    "repository": "https://github.com/modelcontextprotocol/go-sdk",
+    "commit": "3e9d812b181433e7ad88b629ba40a12fdaad94a9"
+  },
+  "rust": {
+    "repository": "https://github.com/modelcontextprotocol/rust-sdk",
+    "commit": "50fba5c2848d3ef9d0df0efacb8a7d001914f40e"
+  }
+}
