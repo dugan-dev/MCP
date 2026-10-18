@@ -117,10 +117,13 @@ def main():
                  cwd=prefix, env=environment, text=True, capture_output=True)
     if "installed MCP consumer passed" not in result.stdout:
         raise RuntimeError(f"Installed roundtrip failed: {result.stdout}")
-    result = run([executable(consumer_build, "mcp_readme", configuration)],
-                 cwd=prefix, env=environment, text=True, capture_output=True)
-    json.loads(result.stdout)
     suffix = ".exe" if os.name == "nt" else ""
+    result = run([prefix / "bin" / ("mcp" + suffix), "--exec",
+                  executable(consumer_build, "mcp_readme", configuration),
+                  "tools", "call", "hello"],
+                 cwd=prefix, env=environment, text=True, capture_output=True)
+    if json.loads(result.stdout).get("content") != [{"type": "text", "text": "Hello, MCP!"}]:
+        raise RuntimeError(f"README tool call failed: {result.stdout}")
     result = run([prefix / "bin" / ("mcp" + suffix), "--version"],
                  cwd=prefix, env=environment, text=True, capture_output=True)
     if result.stdout.strip() != "MCP 0.0.1":

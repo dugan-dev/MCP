@@ -1,40 +1,28 @@
 # MCP
 
-[![Build](https://github.com/dugan-dev/MCP/actions/workflows/build.yml/badge.svg)](https://github.com/dugan-dev/MCP/actions/workflows/build.yml) [![Version](https://img.shields.io/badge/version-0.0.1-blue)](CHANGELOG.md) [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](CMakeLists.txt) [![CMake](https://img.shields.io/badge/CMake-3.25%2B-blue)](CMakePresets.json) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Build](https://github.com/dugan-dev/MCP/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/dugan-dev/MCP/actions/workflows/build.yml) [![Version](https://img.shields.io/badge/version-0.0.1-blue)](CHANGELOG.md) [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://isocpp.org/std/the-standard) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**A C++20 client and server library for the Model Context Protocol.**
-
-Expose tools, resources and prompts. Connect over local processes or HTTP. Keep protocol, transport and application logic separate.
+A C++20 library for building MCP clients and servers. Expose tools, resources and prompts over stdio or HTTP.
 
 **English** · [简体中文](README.zh-CN.md)
 
-<details>
-<summary>Contents</summary>
+Implements protocol **2026-07-28**; legacy `initialize` sessions are not supported. [Compatibility →](docs/compatibility.md)
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Platforms](#platforms)
-- [Capabilities](#capabilities)
-- [Performance](#performance)
-- [Build and Install](#build-and-install)
-- [Integration](#integration)
-- [Documentation](#documentation)
-- [License](#license)
+## Build and Install
 
-</details>
+Requires **C++20**, **CMake 3.25+** and **vcpkg**. Set `VCPKG_ROOT` to your vcpkg checkout, then run from the source directory:
 
-## Features
+```sh
+cmake --preset release
+cmake --build --preset release
+cmake --install build/MCP-release --config Release
+```
 
-- **Client and server** — tools, resources, prompts, discovery and completions.
-- **Local and remote** — subprocess stdio, HTTP/TLS and SSE notifications.
-- **Controlled execution** — cancellation, time budgets, bounded queues and process tree cleanup.
-- **Extensible** — custom transports, handlers, authentication hooks, tasks and skills.
-- **Consistent allocation** — UniMemory-backed JSON with explicit ownership.
-- **Simple integration** — `<mcp/all.h>`, namespace `mcp`, CMake target `MCP::MCP`.
-
-Version **0.0.1** implements the **2026-07-28** protocol. Legacy `initialize`/`initialized` sessions are not supported. Check your client's protocol version before integrating; see [compatibility](docs/compatibility.md).
+Installed to `build/install/release`. For Debug, use `debug` / `Debug`. The **`exe_cli`** target builds **`mcp`**; add the installed `bin` directory to `PATH` to use it.
 
 ## Quick Start
+
+Save as `main.cpp` to expose a tool named `hello`:
 
 ```cpp
 #include <mcp/all.h>
@@ -42,93 +30,52 @@ Version **0.0.1** implements the **2026-07-28** protocol. Legacy `initialize`/`i
 
 int main() {
     mcp::Server server;
-    auto result = server.dispatch(mcp::make_request(1, "server/discover"));
-    std::cout << mcp::serialize_json(result) << '\n';
+    server.add_tool({"hello", "Say hello"},
+        [](const mcp::Json&, mcp::RequestContext&) {
+            return mcp::text_result("Hello, MCP!");
+        });
+    mcp::run_stdio(server, std::cin, std::cout);
 }
 ```
 
-Use the installed CLI to inspect a server:
+Stdout carries protocol messages; write application logs to stderr.
+
+Link the library in your project's `CMakeLists.txt`:
+
+```cmake
+cmake_minimum_required(VERSION 3.25)
+project(HelloMCP LANGUAGES CXX)
+
+find_package(MCP 0.0.1 CONFIG REQUIRED)
+add_executable(hello main.cpp)
+target_link_libraries(hello PRIVATE MCP::MCP)
+```
+
+Set `CMAKE_PREFIX_PATH` to the MCP installation and use the matching vcpkg dependency configuration. See the [build guide](docs/guides/build.md) for consumer setup and runtime deployment.
+
+## Call a Tool
+
+The CLI launches your executable and calls its tool:
 
 ```sh
-mcp --exec /absolute/path/to/server tools list
+mcp --exec /absolute/path/to/hello tools list
+mcp --exec /absolute/path/to/hello tools call hello
+```
+
+The call returns a text result containing `Hello, MCP!`. To inspect an HTTP server:
+
+```sh
 mcp --url http://127.0.0.1:8080/mcp tools list
 ```
 
-[Create a tool and connect a client →](docs/getting-started.md)
-
-## Platforms
-
-| Platform | Build | Validation |
-| --- | --- | --- |
-| Windows | MSVC, C++20 | Native Debug/Release tests and installed consumers |
-| Linux | GCC or Clang, C++20 | Native subprocess checks; full CI configured |
-| macOS | Apple Clang, C++20 | Full CI configured; results in the build badge |
-
-The build badge reports the current CI result. [Validation](docs/validation.md) distinguishes executed checks from supported configurations.
-
-## Capabilities
-
-| Layer | Public headers | Purpose |
-| --- | --- | --- |
-| Memory and values | `memory.h`, `json.h`, `protocol.h` | Allocation, JSON, messages, limits and errors |
-| Descriptors and validation | `tool.h`, `resource.h`, `prompt.h`, `schema.h` | Declare and validate interfaces |
-| Transports | `transport.h`, `stdio.h`, `http.h`, `sse.h` | Process pipes, HTTP/TLS and event streams |
-| Application endpoints | `client.h`, `server.h` | Discover, invoke, dispatch and notify |
-| Optional features | `auth.h`, `features.h`, `extensions.h` | Authorization helpers, input workflows, tasks and skills |
-
-These are logical layers in one library. Applications supply their tools, storage and identity policy. [Architecture and dependencies →](docs/architecture.md)
-
-## Performance
-
-MCP reuses HTTP connections, bounds transport buffers, correlates concurrent requests and supports configurable allocation resources. Blocking public calls use transport I/O with explicit request budgets.
-
-Performance depends on the server, transport, payload and allocator profile. Stress tests are included; no measured speed or memory advantage over other SDKs is claimed.
-
-## Build and Install
-
-Install a C++20 compiler and CMake 3.25+. Set `VCPKG_ROOT` to your vcpkg checkout:
-
-```sh
-cmake --preset release
-cmake --build --preset release
-ctest --preset release
-cmake --install build/MCP-release --config Release
-```
-
-There are only two presets: **`debug`** and **`release`**. Outputs stay in `build/MCP-<preset>`; installation goes to `build/install/<preset>`. Both share vcpkg packages in `build/dependencies`.
-
-| Target | What it builds |
-| --- | --- |
-| `lib_mcp` | MCP library; consumers link `MCP::MCP` |
-| **`exe_cli`** | **`mcp` command-line program** |
-| `example_stdio_server`, `example_stdio_client` | Local process examples |
-| `example_http_server`, `example_http_client` | HTTP examples |
-| `test_*`, `fixture_*` | Tests and test helpers |
-
-MCP has no GUI executable. Dependencies use a pinned vcpkg manifest. Boost.Process **V2** uses **`std::filesystem`**, without Boost.Filesystem. [Build options and troubleshooting →](docs/guides/build.md)
-
-## Integration
-
-```cmake
-find_package(MCP 0.0.1 CONFIG REQUIRED)
-add_executable(app main.cpp)
-target_link_libraries(app PRIVATE MCP::MCP)
-```
-
-Set `CMAKE_PREFIX_PATH` to the installation prefix and use the same dependency toolchain, architecture and runtime. Source embedding uses `add_subdirectory` and the same target.
-
-Use `mcp::Json`, share a compatible UniMemory profile, and read the [ownership and concurrency contract](docs/api-reference.md) before adding callbacks or custom transports.
+Use `mcp --help` for more commands, or follow the [C++ client example](docs/getting-started.md#connect-a-client).
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) — server, client and CLI examples.
-- [Architecture](docs/architecture.md) — layers, dependencies and repository layout.
-- [API contract](docs/api-reference.md) — lifetime, threading, cancellation and errors.
-- [Compatibility](docs/compatibility.md) — specification, official SDKs and version policy.
-- [Build guide](docs/guides/build.md) — dependencies, targets and installation.
-- [Validation](docs/validation.md) — reproducible checks and limits.
-- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md).
+- **Usage:** [Getting started](docs/getting-started.md) · [Build guide](docs/guides/build.md)
+- **Reference:** [API](docs/api-reference.md) · [Architecture](docs/architecture.md) · [Compatibility](docs/compatibility.md)
+- **Project:** [Validation](docs/validation.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## License
 
-[MIT](LICENSE). Attribution and dependency terms remain in [NOTICE](NOTICE), [licenses](https://github.com/dugan-dev/MCP/tree/main/licenses) and [PROVENANCE.md](PROVENANCE.md). Public history begins at 0.0.1; source provenance remains documented.
+[MIT](LICENSE). Source attribution and third-party terms are retained in [NOTICE](NOTICE) and [PROVENANCE.md](PROVENANCE.md).

@@ -1538,7 +1538,7 @@
     },
     {
       "path": ".github/scripts/installed_consumer.py",
-      "sha256": "0b909e3cd2ff48e922ad407211f6e4b10259765fe142744b218bb8ef0d97c520"
+      "sha256": "05a24df15fb001b8ae0dd9371bacf0307d1444e39c3ad9d21d4231bb6a630c4a"
     },
     {
       "path": ".github/workflows/build.yml",
@@ -1574,11 +1574,11 @@
     },
     {
       "path": "README.md",
-      "sha256": "0958e94ae08314f477013d488610016f813b1d3b12bb51cbc917e4b70b85a41e"
+      "sha256": "62f3c034434dcb61053ac82caad702f568543341cdd46bec61d42effe84221cb"
     },
     {
       "path": "README.zh-CN.md",
-      "sha256": "f1682a774327e4ff1c0d998db395d8a2e894b5aed01b2527657d6842ecedc6dc"
+      "sha256": "61aed7471a3ef551a6e96eb88eb43f03bd25b60d05fc04875d4b0d095f8662d7"
     },
     {
       "path": "SECURITY.md",
@@ -1670,7 +1670,7 @@
     },
     {
       "path": "tests/consumer/readme.cpp",
-      "sha256": "338fc7611a5d46ed8ceea7048dc7a9edf328328c6688c2455727d93095388b2b"
+      "sha256": "765a0c1238a04ff25cb5b85991d1321c153f7fe2660a794c29cbb5a90847da3b"
     },
     {
       "path": "tests/embedding/CMakeLists.txt",
