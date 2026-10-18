@@ -1574,11 +1574,11 @@
     },
     {
       "path": "README.md",
-      "sha256": "62f3c034434dcb61053ac82caad702f568543341cdd46bec61d42effe84221cb"
+      "sha256": "399240c33085ca5da239bdefc621fe92aa7a9c1744123bcdf786a7144e4bacfc"
     },
     {
       "path": "README.zh-CN.md",
-      "sha256": "61aed7471a3ef551a6e96eb88eb43f03bd25b60d05fc04875d4b0d095f8662d7"
+      "sha256": "d5a89a882b3f7646e3d845d4b06241ee722a7f107282afc8f3c6ab21b1b45d90"
     },
     {
       "path": "SECURITY.md",
