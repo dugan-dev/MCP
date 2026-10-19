@@ -1,42 +1,35 @@
-# Release validation
+# Validation
 
-MCP **0.0.1** targets protocol **2026-07-28**. The checks below use synthetic data, real local subprocesses and loopback HTTP servers. They do not certify arbitrary third-party services or every extension combination.
+MCP targets protocol **2026-07-28**. Tests use synthetic data, real local subprocesses and loopback HTTP servers.
 
-## Reproduce
+## Native tests
 
 ```sh
 cmake --preset release
 cmake --build --preset release --parallel 4
 ctest --preset release --parallel 4 --output-on-failure
-cmake --install build/MCP-release --config Release
 ```
 
-Repeat with the `debug` preset and `Debug` configuration. Configure prerequisites and the two presets are described in the [build guide](guides/build.md). The public headers are compiled individually; installed consumers also compile the exact README example and execute a real client/server roundtrip.
+Repeat with `debug` to exercise MSVC Debug CRT fault injection. The suite covers messages, schemas, authorization, pagination, TLS/HTTP/SSE, Unicode process launch, cancellation, ownership, shutdown races and stress workloads. Public headers are compiled independently; the offline feature example is also executed.
 
-## Local qualification — 2026-10-19
+## Installed packages
 
-Windows x64 used CMake 4.4.2, MSVC 19.51, Boost 1.91 and the standard UniMemory profile (statistics OFF, checks AUTO). Dependencies were restored from the pinned vcpkg baseline and local Boost.Process overlay.
+```sh
+python .github/scripts/installed_consumer.py --preset release --linkage static --triplet x64-windows
+```
 
-| Check | Result |
-| --- | --- |
-| Complete Release build and CTest | 243 entries: 237 passed, 6 explicitly skipped, 0 failed |
-| Complete Debug build and CTest | 243 passed, 0 skipped, 0 failed; all six native fault-injection tests executed |
-| Static Debug and Release install and external consumer | Passed |
-| Shared Release install and external consumer | Passed |
-| Installed CLI, consumer and README example with restricted Windows PATH | Passed |
-| Installed third-party notices | Six dependency notice files matched their selected SDK sources byte for byte |
-| Official Python, Go and Rust SDK interop | 12/12 passed: each SDK, both client/server directions, stdio and HTTP |
-| Native Linux Release build and CTest (GCC 13.3) | 245 entries: 239 passed, 6 MSVC-only skips, 0 failed |
-| Native Linux static install and external consumer / README example | Passed with independently built Linux dependencies |
-| Native Linux environment-lifetime and send/close race regressions | Passed |
-| Workflow syntax, documentation links and source provenance hashes | Checked before publication |
+Use the triplet and linkage selected for the source build. The check installs MCP, builds external consumers, all ten C++ feature-guide snippets and the actual C++ blocks extracted from both READMEs, then runs the CLI and English README server. Windows uses a restricted runtime search path; dependency notices are checked too. Static/shared and Debug/Release are separate configurations.
 
-The six Release skips exercise native allocation/thread-start failure through the MSVC Debug CRT. They are not protocol exclusions. The tests cover malformed messages, schemas, authorization helpers, task deadlines, pagination, HTTP/TLS/SSE, process launch options, Unicode, cancellation, process-tree cleanup, resource ownership and shutdown races. Failure injection verifies that failed thread creation and shutdown allocation do not leak the subprocess or strand pending requests.
+## Protocol and SDK interoperability
 
-The SDK matrix asserts the modern protocol lifecycle and exercises discovery, tool listing/calls, 16 concurrent calls, resources, prompts and structured invalid-parameter errors. Exact SDK revisions, adapter sources and reproduction commands are retained in the [interop harness](https://github.com/dugan-dev/MCP/tree/main/tests/mcp/interop/python_go_rust). See [compatibility](compatibility.md) for the version boundary.
+The [official conformance guide](conformance.md) describes the fixed **37 server + 32 client** requirement set and its strict, zero-failure gate. Upstream extension/pending scenarios are retained as separate diagnostics; they are not counted as successes.
+
+The [SDK interoperability harness](https://github.com/dugan-dev/MCP/tree/main/tests/mcp/interop/python_go_rust) exercises official Python, Go and Rust SDKs in both client/server directions over stdio and HTTP. Exact external revisions and adapters are included with the harness.
 
 ## Continuous integration
 
-The [build workflow](https://github.com/dugan-dev/MCP/actions/workflows/build.yml) has 12 combinations: Windows, Linux and macOS; Debug and Release; static and shared libraries. Each job builds, runs its configured test suite, installs the package and runs an external consumer. The workflow retains failure diagnostics. Its live results, rather than the existence of a configuration, establish which platforms passed for a commit.
+The [build workflow](https://github.com/dugan-dev/MCP/actions/workflows/build.yml) contains 12 native combinations: Windows, Linux and macOS; Debug and Release; static and shared libraries. Each builds, tests, installs MCP and checks external consumers. Release/static jobs also verify package/source embedding with a host-provided UniMemory target, run both official conformance roles and record performance without a speed threshold.
 
-Local macOS execution, alternative allocator profiles, exhaustive fuzzing, long-running production deployments and comparative performance benchmarks are not claimed by this release. API contracts and limitations are documented in the [API reference](api-reference.md).
+Three additional Linux profiles run Clang ASan/UBSan with static analysis and two 10,000-execution fuzz smoke runs, GCC TSan, and GCC coverage. Sanitizer diagnostics are fatal. Coverage is exported as HTML/XML; its nonzero floor rejects a missing report rather than claiming complete coverage. Fuzz inputs are copied into the build directory before mutation. A separate repository check verifies metadata, local documentation links and clang-format 19.1.7. Logs and measurements are uploaded as artifacts; configured profiles are not evidence of execution until that commit runs.
+
+Live results establish which configurations passed for a particular commit. A local pass does not establish an unrun platform result or an official SDK tier. Comparative benchmarks, arbitrary third-party services and every experimental extension are outside this qualification.

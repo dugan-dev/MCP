@@ -1,6 +1,6 @@
 # Protocol and SDK compatibility
 
-MCP 0.0.1 implements protocol revision **2026-07-28**. The official specification, rather than the behavior of one SDK, defines the wire contract.
+MCP 1.0.0 implements protocol revision **2026-07-28**. The official specification, rather than the behavior of one SDK, defines the wire contract.
 
 ## Protocol scope
 
@@ -22,7 +22,7 @@ The retained official JSON Schema fixture is checked against the stable specific
 
 ## Comparison
 
-| Aspect | MCP 0.0.1 | Official Python / Go / Rust | Inspected cpp-mcp |
+| Aspect | MCP 1.0.0 | Official Python / Go / Rust | Inspected cpp-mcp |
 | --- | --- | --- | --- |
 | Primary interface | C++20, explicit client/server/transport | Language-native SDK APIs | C++ client/server API |
 | Protocol lifecycle | 2026-07-28 only | Modern and legacy paths; explicit mode matters | 2025-03-26 initialize lifecycle |
@@ -38,4 +38,4 @@ For official SDK tests, Python explicitly selects `mode="2026-07-28"`, Rust sele
 
 The public source interface is `<mcp/...>`, namespace `mcp`, and target `MCP::MCP`. The initial public version is **0.0.1**. Earlier private extraction names and Git history are not its public compatibility baseline.
 
-Patch releases intend to preserve documented valid source usage. Bug fixes may reject malformed input. Breaking public changes require a version change and migration guidance. There is no binary ABI guarantee in 0.0.1; rebuild consumers when toolchains, dependency ABIs or layouts change. See the [API contract](api-reference.md).
+Patch releases intend to preserve documented valid source usage. Bug fixes may reject malformed input. Breaking public changes require a version change and migration guidance. There is no binary ABI guarantee across compiler/runtime/dependency changes; rebuild consumers when toolchains, dependency ABIs or layouts change. See the [API contract](api-reference.md).

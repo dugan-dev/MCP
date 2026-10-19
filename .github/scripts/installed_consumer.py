@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -63,10 +64,11 @@ def main():
     parser.add_argument("--preset", choices=("debug", "release"), required=True)
     parser.add_argument("--linkage", choices=("static", "shared"), required=True)
     parser.add_argument("--triplet", required=True)
+    parser.add_argument("--build-dir", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     configuration = args.preset.capitalize()
-    source_build = root / "build" / f"MCP-{args.preset}"
+    source_build = args.build_dir.resolve() if args.build_dir else root / "build" / f"MCP-{args.preset}"
     prefix = root / "build" / "ci-install" / args.linkage / args.preset
     consumer_build = root / "build" / f"ci-consumer-{args.linkage}-{args.preset}"
     sdk = root / "build" / "dependencies" / args.triplet
@@ -79,12 +81,38 @@ def main():
         "share/licenses/MCP/NOTICE",
         "share/licenses/MCP/mcp/LICENSE",
         "share/licenses/MCP/schema/MCP-LICENSE",
+        "share/doc/MCP/docs/build.md",
+        "share/doc/MCP/examples/features.cpp",
+        "share/doc/MCP/examples/oauth_client.cpp",
     ):
         if not (prefix / relative).is_file():
             raise RuntimeError(f"Incomplete installed package: {prefix / relative}")
     if (prefix / "include" / "dearagentkit").exists():
         raise RuntimeError("The installed package still contains obsolete public headers")
     check_dependency_licenses(prefix)
+    feature_document = (root / "docs" / "features.md").read_text(encoding="utf-8")
+    snippets = re.findall(r"```cpp\n(.*?)```", feature_document, re.S)
+    if len(snippets) < 8:
+        raise RuntimeError("Feature documentation is missing its compiled usage examples")
+    consumer_build.mkdir(parents=True, exist_ok=True)
+    documented = "#include <mcp/all.h>\n#include <iostream>\n#include <string>\n"
+    for index, snippet in enumerate(snippets):
+        documented += f"void documented_example_{index}(mcp::Server& server, mcp::Client& client) {{\n{snippet}\n}}\n"
+    for language in ("README.md", "README.zh-CN.md"):
+        blocks = re.findall(r"```cpp\n(.*?)```", (root / language).read_text(encoding="utf-8"), re.S)
+        if not blocks or "int main()" not in blocks[0]:
+            raise RuntimeError(f"Missing complete README server example: {language}")
+        if language == "README.md":
+            (consumer_build / "compiled_readme.cpp").write_text(blocks[0], encoding="utf-8")
+        else:
+            (consumer_build / "compiled_chinese_readme.cpp").write_text(blocks[0], encoding="utf-8")
+        for index, snippet in enumerate(blocks[1:]):
+            server_name = "" if re.search(r"mcp::Server\s+server\b", snippet) else "server"
+            client_name = "" if re.search(r"mcp::Client\s+client\b", snippet) else "client"
+            label = "english" if language == "README.md" else "chinese"
+            documented += (f"void {label}_readme_{index}(mcp::Server& {server_name}, mcp::Client& {client_name}) {{\n"
+                           + snippet + "\n}\n")
+    (consumer_build / "documented_examples.cpp").write_text(documented, encoding="utf-8")
     arguments = [
         "cmake", "-S", root / "tests" / "consumer", "-B", consumer_build,
         f"-DCMAKE_BUILD_TYPE={configuration}",
@@ -126,8 +154,26 @@ def main():
         raise RuntimeError(f"README tool call failed: {result.stdout}")
     result = run([prefix / "bin" / ("mcp" + suffix), "--version"],
                  cwd=prefix, env=environment, text=True, capture_output=True)
-    if result.stdout.strip() != "MCP 0.0.1":
+    if result.stdout.strip() != "MCP 1.0.0":
         raise RuntimeError(f"Unexpected installed CLI identity: {result.stdout}")
+    if args.preset == "release" and args.linkage == "static":
+        for mode in ("package", "source"):
+            host_build = root / "build" / f"ci-embedding-{mode}"
+            host_arguments = ["cmake", "-S", root / "tests" / "embedding", "-B", host_build,
+                              "-G", generator, "-DCMAKE_BUILD_TYPE=Release",
+                              f"-DMCP_EMBED_SOURCE={'ON' if mode == 'source' else 'OFF'}",
+                              f"-DCMAKE_PREFIX_PATH={prefix.as_posix()};{sdk.as_posix()}"]
+            for key, flag in (("CMAKE_GENERATOR_PLATFORM", "-A"), ("CMAKE_GENERATOR_TOOLSET", "-T")):
+                value = cache_entry(cache, key)
+                if value:
+                    host_arguments += [flag, value]
+            for key in ("UNIMEMORY_BACKEND", "UNIMEMORY_STATISTICS", "UNIMEMORY_CHECKS"):
+                value = cache_entry(cache, key)
+                if value:
+                    host_arguments += [f"-D{key}={value}"]
+            run(host_arguments)
+            run(["cmake", "--build", host_build, "--config", "Release", "--parallel", "4"])
+            run([executable(host_build, "mcp_host_consumer", "Release")], cwd=prefix, env=environment)
     print(f"Installed {args.linkage} {configuration} package and runtime smoke passed.")
 
 

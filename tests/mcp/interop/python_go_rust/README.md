@@ -20,7 +20,7 @@ The scripts verify checkout revisions and reject tracked SDK modifications.
 ## Prepare fixtures
 
 Check out each official repository at the commit recorded in `pins.json`.
-Use Python 3.11+, Go 1.25+, Rust 1.88+, and an installed MCP 0.0.1 package.
+Use Python 3.11+, Go 1.25+, Rust 1.88+, and an installed MCP 1.0.0 package.
 Install the Python checkout's runtime dependencies in an isolated environment;
 the adapter imports `mcp` and `mcp-types` directly from that checkout. For frozen
 provisioning, export the pinned checkout's `uv.lock` and install the exported

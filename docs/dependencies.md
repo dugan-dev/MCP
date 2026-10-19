@@ -4,7 +4,7 @@ The package retains the pinned implementation's dependency versions and vcpkg ba
 
 | Dependency | Required scope | License |
 |---|---|---|
-| Official UniMemory >=0.0.1 and <0.1.0 | Public allocation owner; bundled source pinned at `3dbe431` | MIT |
+| Official UniMemory >=0.0.1 and <0.1.0 | Public allocation owner; Git submodule pinned at `3dbe431` | MIT |
 | nlohmann/json >=3.11 | Public JSON ABI; installed package enforces exact build version | MIT |
 | libcurl >=7.85 | HTTP client/TLS | curl license |
 | Boost Asio/Beast/Process >=1.91 | HTTP server and subprocess V2; standard filesystem profile | BSL-1.0 |

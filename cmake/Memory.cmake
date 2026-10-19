@@ -60,6 +60,10 @@ function(mcp_add_memory)
         find_package(UniMemory 0.0.1 CONFIG QUIET)
     endif()
     if(NOT TARGET UniMemory::UniMemory)
+        if(NOT EXISTS "${MCP_UNIMEMORY_SOURCE_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR "UniMemory source is missing. Run git submodule update --init --recursive, "
+                "or provide UniMemory::UniMemory, an installed UniMemory package, or MCP_UNIMEMORY_SOURCE_DIR.")
+        endif()
         set(UNIMEMORY_BUILD_TESTS OFF CACHE BOOL "Build the selected memory backend tests")
         set(UNIMEMORY_BUILD_EXAMPLES OFF CACHE BOOL "Build upstream memory examples")
         # Reuse upstream sanitizer-specific fixtures and runtime compatibility.

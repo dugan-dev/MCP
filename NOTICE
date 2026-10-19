@@ -1,11 +1,11 @@
 Standalone MCP extraction: the original Kit notice below is retained for attribution.
 This package contains the generic MCP implementation only. Current official UniMemory
-revision: 3dbe431a6c9a4bb5cf0aebd9e472baebfd96f925 (see PROVENANCE.md).
+revision: 3dbe431a6c9a4bb5cf0aebd9e472baebfd96f925 (see source provenance below).
 
 DearAgentKit contains independent LLM and MCP modules and the MIT-licensed UniMemory dependency.
 The LLM and MCP implementations were adapted from the author's earlier projects.
 Original licenses and notices are retained in licenses/ and external/unimemory/.
-See docs/sources.json for exact commits and docs/dependencies.md for dependency licenses.
+Exact source commits are retained below; dependency licenses are listed in docs/dependencies.md.
 
 MCP implementation attribution:
 DearAgentKit 0.1.0 — MCP module
@@ -23,7 +23,7 @@ tests/mcp/fixtures/mcp-2026-07-28.schema.json
 Source: https://github.com/modelcontextprotocol/modelcontextprotocol/blob/046fa30efd374370afb87ef830bd788eac5f217e/schema/2026-07-28/schema.json
 SHA-256: ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203
 The fixture is copied without modification. The private generated
-`src/mcp/input_schemas.h` extracts six input/output definitions and their local
+`src/input_schemas.h` extracts six input/output definitions and their local
 references from this fixture, removes only descriptive metadata, and is
 redistributed under the same upstream license terms. The fixture's
 upstream licensing transition notice and
@@ -50,3 +50,22 @@ native dependency binaries must include those packages' notices and licenses.
 
 tests/mcp/fixtures/localhost.crt and localhost.key are a deliberately public,
 generated self-signed test identity, not production credentials.
+
+SOURCE PROVENANCE
+
+Official conformance scenarios are executed from modelcontextprotocol/conformance,
+revision c37eec888e1c6ff140af79987a40008548b7cc5f (MIT), as an external test tool.
+The C++ fixture implements the published scenario registrations; it does not replace
+or modify the upstream checker. Its source pin is tests/conformance/pin.json.
+
+MCP 0.0.1 starts a new public repository history. Its implementation derives from the generic MCP source in DearAgent commit `bbad6c32f332c371423f0f2d7e9852b672862c67`, directory `external/kit/`, followed by independent MCP development. Historical Git objects, build products, research work, credentials and personal configuration are not included in the public source export. A fresh history does not remove the attribution below.
+
+Runtime source resides in `src/`; the public interface is `include/mcp/`, namespace `mcp`, umbrella header `mcp/all.h`, and CMake target `MCP::MCP`. Wire identifiers remain those of the official protocol. Tests, fixtures, CLI and examples are retained; runtime deployment and license helpers derive from Kit's existing helper closure.
+
+Kit was originally imported from `02b3004d70df2824762364313d9213768a11d09e`. Native MCP historical source: UniMCP `b450b822ff5dff2d524d3b24b2147e7eb2cf1413`; cpp-mcp upstream reference `13a8bef` (https://github.com/hkr04/cpp-mcp). MIT attribution is retained in `licenses/mcp.txt` and `NOTICE`. Schema fixture provenance and license are in `NOTICE` and `tests/mcp/fixtures/licenses/MCP-LICENSE`.
+
+Official UniMemory fallback is the Git submodule `external/unimemory`, pinned to `3dbe431a6c9a4bb5cf0aebd9e472baebfd96f925` (v0.0.1) from https://github.com/dugan-dev/UniMemory. The parent Git tree records the exact commit, `.gitmodules` records the repository URL, and its MIT license remains in that directory. The submodule replaces the copied source snapshot without changing the dependency version. A host target or installed package may supply the same compatible fixed profile; this project does not create a second UniMemory target when one already exists.
+
+Historical Kit documentation is reference material, not this project's verification record. Standalone verification scope is recorded in `docs/validation.md`. Runtime dependency redistributors must retain dependency licenses; the Windows install helper collects the configured dependency notices. The source package contains no dependency binaries. The localhost test key is an intentionally public fixture.
+
+The project-local `ports/boost-process` profile derives from vcpkg baseline `2f1d605400c8727cc00c15797aba796c88ccd523`, retaining its Boost 1.91.0 source archive hash, original patch and licenses. It enables upstream `BOOST_PROCESS_USE_STD_FS`; an additional CMake-only comment patch uses the BoostRoot scanner's supported `Boost-Exclude` directive for the inactive Filesystem branch. Boost implementation sources remain unmodified. See https://github.com/dugan-dev/MCP/tree/main/ports/boost-process.

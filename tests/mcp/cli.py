@@ -17,7 +17,7 @@ def run(binary, *args, expected=0):
 def main():
     binary = sys.argv[1]
     assert "Usage:" in run(binary, "--help").stdout
-    assert run(binary, "--version").stdout.strip() == "MCP 0.0.1"
+    assert run(binary, "--version").stdout.strip() == "MCP 1.0.0"
     assert "valid JSON" in run(binary, "--url", "http://127.0.0.1:1", "tools", "call", "x", "{", expected=2).stderr
     assert "choose exactly one" in run(binary, "--url", "http://localhost", "--exec", "unused", "tools", "list", expected=2).stderr
     assert "task input responses must be a JSON object" in run(binary, "--url", "http://localhost", "tasks", "update", "id", "[]", expected=2).stderr

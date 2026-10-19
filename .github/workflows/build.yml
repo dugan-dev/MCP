@@ -14,8 +14,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repository:
+    name: Metadata, documentation and formatting
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install clang-format==19.1.7
+      - run: python tools/check.py
+
   native:
-    name: ${{ matrix.os }} / ${{ matrix.preset }} / ${{ matrix.linkage }}
+    name: ${{ matrix.os }} / ${{ matrix.preset }} / ${{ matrix.linkage }} / ${{ matrix.profile }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     defaults:
@@ -27,15 +40,33 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-2022]
         preset: [debug, release]
         linkage: [static, shared]
+        profile: [native]
+        include:
+          - os: ubuntu-24.04
+            preset: debug
+            linkage: static
+            profile: asan-ubsan
+          - os: ubuntu-24.04
+            preset: debug
+            linkage: static
+            profile: tsan
+          - os: ubuntu-24.04
+            preset: debug
+            linkage: static
+            profile: coverage
     env:
       VCPKG_ROOT: ${{ github.workspace }}/build/vcpkg
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/vcpkg-binary-cache,readwrite
       VCPKG_DISABLE_METRICS: '1'
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      TSAN_OPTIONS: halt_on_error=1
     steps:
       - name: Check out MCP
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          submodules: recursive
 
       - name: Read the pinned dependency baseline
         id: dependencies
@@ -45,6 +76,8 @@ jobs:
             throw 'vcpkg.json must select a full pinned builtin-baseline commit'
           }
           "baseline=$($manifest.'builtin-baseline')" >> $env:GITHUB_OUTPUT
+          $conformance = Get-Content -LiteralPath tests/conformance/pin.json -Raw | ConvertFrom-Json
+          "conformance=$($conformance.revision)" >> $env:GITHUB_OUTPUT
           $architecture = if ($env:RUNNER_ARCH -eq 'ARM64') { 'arm64' } else { 'x64' }
           $platform = switch ($env:RUNNER_OS) {
             'Windows' { 'windows' }
@@ -80,6 +113,16 @@ jobs:
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Select stable C++20 stop-token support on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode=$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | grep -E '/Xcode_26([.][0-9]+)*[.]app$' | sort | tail -1 || true)
+          test -n "$xcode" || { echo 'MCP requires Xcode 26+ with stable std::stop_token support'; exit 1; }
+          sudo xcode-select --switch "$xcode/Contents/Developer"
+          xcrun clang++ --version
+
       - name: Select Python for the synthetic subprocess tests
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -90,6 +133,16 @@ jobs:
           $arguments = @('--preset', '${{ matrix.preset }}', "-DVCPKG_TARGET_TRIPLET=$env:MCP_CI_TRIPLET")
           $shared = if ('${{ matrix.linkage }}' -eq 'shared') { 'ON' } else { 'OFF' }
           $arguments += "-DBUILD_SHARED_LIBS=$shared"
+          if ('${{ matrix.profile }}' -eq 'asan-ubsan') {
+            $env:CC = 'clang-18'
+            $env:CXX = 'clang++-18'
+            $arguments += @('-DMCP_SANITIZER=address', '-DMCP_CLANG_TIDY=ON', '-DMCP_BUILD_FUZZERS=ON', '-DMCP_CLANG_TIDY_EXECUTABLE=/usr/bin/clang-tidy-18')
+          }
+          if ('${{ matrix.profile }}' -eq 'tsan') { $arguments += '-DMCP_SANITIZER=thread' }
+          if ('${{ matrix.profile }}' -eq 'coverage') { $arguments += '-DMCP_COVERAGE=ON' }
+          if ('${{ matrix.preset }}' -eq 'release' -and '${{ matrix.linkage }}' -eq 'static') {
+            $arguments += @('-DMCP_BUILD_CONFORMANCE=ON', '-DMCP_BUILD_BENCHMARKS=ON')
+          }
           if ($IsWindows) {
             $arguments += @('-G', 'Visual Studio 17 2022', '-A', 'x64')
           } else {
@@ -105,15 +158,73 @@ jobs:
         run: ctest --preset ${{ matrix.preset }} --parallel 4 --output-on-failure --no-tests=error
 
       - name: Install and run consumers outside the source build
+        if: matrix.profile == 'native'
         run: |
           python .github/scripts/installed_consumer.py --preset '${{ matrix.preset }}' --linkage '${{ matrix.linkage }}' --triplet "$env:MCP_CI_TRIPLET"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Exercise malformed-input fuzz corpora
+        if: matrix.profile == 'asan-ubsan'
+        run: |
+          foreach ($kind in @('protocol', 'sse')) {
+            $corpus = "build/fuzz/$kind"
+            New-Item -ItemType Directory -Path $corpus -Force | Out-Null
+            Copy-Item -Path "tests/mcp/fuzz/corpus/$kind/*" -Destination $corpus
+            & "./build/MCP-debug/mcp_fuzz_$kind" -runs=10000 -max_len=4096 -timeout=5 -rss_limit_mb=1024 $corpus
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Record performance without a speed threshold
+        if: matrix.preset == 'release' && matrix.linkage == 'static'
+        run: |
+          $benchmark = './build/MCP-release/benchmarks/mcp_benchmark'
+          if ($IsWindows) { $benchmark = './build/MCP-release/benchmarks/Release/mcp_benchmark.exe' }
+          & $benchmark --iterations 1000 --output build/performance.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect native source coverage
+        if: matrix.profile == 'coverage'
+        run: |
+          python -m pip install gcovr==8.3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Path build/coverage -Force | Out-Null
+          gcovr --root . --filter 'src/' --filter 'include/mcp/' --xml-pretty --xml build/coverage/coverage.xml --html-details build/coverage/index.html --print-summary --fail-under-line 1 build/MCP-debug
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Set up Node for official protocol tests
+        if: matrix.preset == 'release' && matrix.linkage == 'static'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+
+      - name: Check out the fixed official conformance referee
+        if: matrix.preset == 'release' && matrix.linkage == 'static'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: modelcontextprotocol/conformance
+          ref: ${{ steps.dependencies.outputs.conformance }}
+          path: build/official-conformance
+          persist-credentials: false
+
+      - name: Require every official server and client scenario
+        if: matrix.preset == 'release' && matrix.linkage == 'static'
+        run: |
+          python tests/conformance/test_runner.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --ignore-scripts --prefix build/official-conformance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --prefix build/official-conformance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $binaries = 'build/MCP-release/tests/conformance'
+          if ($IsWindows) { $binaries += '/Release' }
+          python tests/conformance/run.py --harness build/official-conformance --bin-dir $binaries --output "$env:RUNNER_TEMP/mcp-conformance"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Preserve diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: build-${{ matrix.os }}-${{ matrix.preset }}-${{ matrix.linkage }}
+          name: build-${{ matrix.os }}-${{ matrix.preset }}-${{ matrix.linkage }}-${{ matrix.profile }}
           retention-days: 14
           if-no-files-found: ignore
           path: |
@@ -124,3 +235,8 @@ jobs:
             build/MCP-*/vcpkg-manifest-install.log
             build/ci-consumer-*/CMakeCache.txt
             build/ci-consumer-*/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ runner.temp }}/mcp-conformance/
+            build/coverage/
+            build/performance.json
+            build/fuzz/
+            build/ci-embedding-*/CMakeCache.txt

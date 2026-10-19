@@ -1,4 +1,4 @@
-add_library(lib_cli_impl STATIC cli/mcp/main.cpp)
+add_library(lib_cli_impl STATIC cli/commands.cpp)
 set_target_properties(lib_cli_impl PROPERTIES OUTPUT_NAME MCP_cli_impl FOLDER "Libraries")
 target_link_libraries(lib_cli_impl PRIVATE MCP::MCP Boost::process)
 target_compile_features(lib_cli_impl PRIVATE cxx_std_20)

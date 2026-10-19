@@ -10,11 +10,22 @@ describe the root cause. Default tests use synthetic payloads, subprocesses and
 loopback servers. Do not commit credentials, private payloads, local settings,
 dependency binaries or build output. Report security issues using [SECURITY.md](SECURITY.md).
 
-## Local validation
+## Versioning and breaking changes
+
+Use semantic versioning. Patch releases fix defects without intentionally changing documented valid source usage; minor releases add compatible functionality. A source-breaking change requires a major release once 1.0 is published; before 1.0 it requires a minor-version change. Changes to public signatures, ownership, protocol guarantees or accepted valid inputs are breaking changes. Tightening malformed or unsafe input handling is a security/correctness fix, with migration notes when callers may be affected. Public option/result aggregates may gain fields: use named members and default initialization, not a fixed positional structured-binding count.
+
+Explain breaking changes and migration steps in the GitHub Release notes before publication. Do not overwrite an existing release tag. Public C++ binary ABI compatibility is not promised across compiler/runtime/dependency changes: rebuild consumers, including after public aggregate layouts change. Internal `src/` details are not public API.
+
+A production-ready stable release is designated explicitly in its GitHub Release notes, tied to one commit, after the complete supported platform matrix, installation consumers and both official conformance roles pass. A green local run alone is not an official tier assignment or a production-readiness declaration for an older release. Version notes live in GitHub Releases.
+
+See `docs/dependency-policy.md` and `docs/roadmap.md` for dependency review and the technical release gates. These documents intentionally do not create response-time or critical-bug repair promises.
+
+## Native validation
 
 Set `VCPKG_ROOT` to a bootstrapped vcpkg checkout, then use the existing presets:
 
 ```sh
+git submodule update --init --recursive
 cmake --preset debug
 cmake --build --preset debug --parallel 4
 ctest --preset debug --output-on-failure

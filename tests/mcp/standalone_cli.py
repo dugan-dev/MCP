@@ -10,7 +10,7 @@ def run(*args):
     assert result.returncode == 0, (args, result.returncode, result.stdout, result.stderr)
     return result.stdout
 assert run('--help').startswith('MCP command line client')
-assert run('--version').strip() == 'MCP 0.0.1'
+assert run('--version').strip() == 'MCP 1.0.0'
 result = json.loads(run('--exec', server, 'tools', 'call', 'echo', json.dumps({'message': 'direct standalone MCP'})))
 assert result['content'][0]['text'] == 'direct standalone MCP', result
 print('Direct MCP help/version and real stdio echo roundtrip passed')

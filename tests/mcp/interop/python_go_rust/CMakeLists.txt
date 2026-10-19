@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 project(MCPInteropAudit LANGUAGES CXX)
-find_package(MCP 0.0.1 CONFIG REQUIRED)
+find_package(MCP 1.0.0 CONFIG REQUIRED)
 add_executable(interop_cpp_client cpp_client.cpp)
 target_link_libraries(interop_cpp_client PRIVATE MCP::MCP)
 if(MSVC)

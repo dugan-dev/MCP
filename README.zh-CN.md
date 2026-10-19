@@ -1,6 +1,6 @@
 # MCP
 
-[![Build](https://github.com/dugan-dev/MCP/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/dugan-dev/MCP/actions/workflows/build.yml?query=branch%3Amain) [![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](CHANGELOG.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/std/the-standard) [![CMake](https://img.shields.io/badge/CMake-3.25%2B-green.svg)](https://cmake.org/) [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#平台)
+[![Build](https://github.com/dugan-dev/MCP/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/dugan-dev/MCP/actions/workflows/build.yml?query=branch%3Amain) [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/dugan-dev/MCP/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/std/the-standard) [![CMake](https://img.shields.io/badge/CMake-3.25%2B-green.svg)](https://cmake.org/) [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#平台)
 
 现代 C++20 MCP 客户端与服务端库，通过 stdio 或 HTTP 提供工具、资源与提示词。
 
@@ -29,7 +29,7 @@
 - **🧠 统一内存**：使用 UniMemory 管理 JSON 内存分配。
 - **📦 简单集成**：包含 `<mcp/all.h>`，链接 `MCP::MCP`。
 
-**0.0.1** 实现 **2026-07-28** 版协议，不支持旧版 `initialize` 会话。[兼容性说明 →](docs/compatibility.md)
+**1.0.0** 实现 **2026-07-28** 版协议，不支持旧版 `initialize` 会话。[兼容性说明 →](docs/compatibility.md)
 
 ## 快速开始
 
@@ -42,12 +42,9 @@
 #include <iostream>
 
 int main() {
-    mcp::Server server;
-    server.add_tool({"hello", "Say hello"},
-        [](const mcp::Json&, mcp::RequestContext&) {
-            return mcp::text_result("Hello, MCP!");
-        });
-    mcp::run_stdio(server, std::cin, std::cout);
+  mcp::Server server;
+  server.add_tool({"hello", "Say hello"}, [](const mcp::Json&, mcp::RequestContext&) { return mcp::text_result("Hello, MCP!"); });
+  mcp::run_stdio(server, std::cin, std::cout);
 }
 ```
 
@@ -58,14 +55,8 @@ int main() {
 声明输入结构，返回文本结果：
 
 ```cpp
-server.add_tool(
-    {"echo", "Return a message",
-     {{"type", "object"},
-      {"properties", {{"message", {{"type", "string"}}}}},
-      {"required", {"message"}}}},
-    [](const mcp::Json& args, mcp::RequestContext&) {
-        return mcp::text_result(mcp::text(args["message"]));
-    });
+server.add_tool({"echo", "Return a message", {{"type", "object"}, {"properties", {{"message", {{"type", "string"}}}}}, {"required", {"message"}}}},
+                [](const mcp::Json& args, mcp::RequestContext&) { return mcp::text_result(mcp::text(args["message"])); });
 ```
 
 ### 资源
@@ -73,11 +64,8 @@ server.add_tool(
 通过 URI 提供内容：
 
 ```cpp
-server.add_resource(
-    {"example://hello", "hello", "Greeting", "text/plain"},
-    [](const mcp::Json&, mcp::RequestContext&) {
-        return mcp::text_resource("example://hello", "Hello, MCP!");
-    });
+server.add_resource({"example://hello", "hello", "Greeting", "text/plain"},
+                    [](const mcp::Json&, mcp::RequestContext&) { return mcp::text_resource("example://hello", "Hello, MCP!"); });
 ```
 
 ### 提示词
@@ -85,12 +73,8 @@ server.add_resource(
 创建带有必填参数的提示词模板：
 
 ```cpp
-server.add_prompt(
-    {"greet", "Generate a greeting",
-     mcp::Json::array({{{"name", "name"}, {"required", true}}})},
-    [](const mcp::Json& args, mcp::RequestContext&) {
-        return mcp::prompt_result("Hello, " + std::string(mcp::text(args["name"])));
-    });
+server.add_prompt({"greet", "Generate a greeting", mcp::Json::array({{{"name", "name"}, {"required", true}}})},
+                  [](const mcp::Json& args, mcp::RequestContext&) { return mcp::prompt_result("Hello, " + std::string(mcp::text(args["name"]))); });
 ```
 
 ### 客户端
@@ -138,8 +122,7 @@ listener.stop();
 将子进程传输换为 HTTP，客户端接口保持一致：
 
 ```cpp
-auto transport = std::make_shared<mcp::HttpTransport>(
-    mcp::HttpClientOptions{"http://127.0.0.1:8080/mcp"});
+auto transport = std::make_shared<mcp::HttpTransport>(mcp::HttpClientOptions{"http://127.0.0.1:8080/mcp"});
 mcp::Client client(transport);
 
 auto info = client.discover();
@@ -180,7 +163,7 @@ mcp --help
 | --- | --- | --- |
 | Windows x64 | MSVC | 本机 Debug 与 Release |
 | Linux x64 | GCC / Clang | 本机 GCC Release |
-| macOS | Apple Clang | 已配置 CI，结果见 Build 徽章 |
+| macOS | Apple Clang (Xcode 26+) | 已配置 CI，结果见 Build 徽章 |
 | Android / iOS | — | 尚未进行设备验证 |
 
 CI 覆盖静态库、动态库和 Debug/Release。[已执行的验证 →](docs/validation.md)
@@ -199,13 +182,15 @@ CI 覆盖静态库、动态库和 Debug/Release。[已执行的验证 →](docs/
 
 ## 性能
 
-复用 HTTP 连接，支持并发请求与有界缓存，使用 UniMemory 管理内存。提供[验证与压力测试](docs/validation.md)，暂未发布对比基准。
+复用 HTTP 连接，支持并发请求与有界缓存，使用 UniMemory 管理内存。参见[性能测量](docs/performance.md)与[测试验证](docs/validation.md)，暂未发布跨 SDK 对比数据。
 
 ## 构建与安装
 
 需要 **C++20**、**CMake 3.25+** 和 **vcpkg**。将 `VCPKG_ROOT` 指向 vcpkg 目录，在源码目录执行：
 
 ```sh
+git clone --recurse-submodules https://github.com/dugan-dev/MCP.git
+cd MCP
 cmake --preset release
 cmake --build --preset release
 cmake --install build/MCP-release --config Release
@@ -221,23 +206,23 @@ cmake --install build/MCP-release --config Release
 cmake_minimum_required(VERSION 3.25)
 project(HelloMCP LANGUAGES CXX)
 
-find_package(MCP 0.0.1 CONFIG REQUIRED)
+find_package(MCP 1.0.0 CONFIG REQUIRED)
 add_executable(hello main.cpp)
 target_link_libraries(hello PRIVATE MCP::MCP)
 ```
 
-将 MCP 安装目录加入 `CMAKE_PREFIX_PATH`，使用匹配的依赖工具链。项目配置与运行库部署见[构建指南](docs/guides/build.md)。
+将 MCP 安装目录加入 `CMAKE_PREFIX_PATH`，使用匹配的依赖工具链。项目配置与运行库部署见[构建指南](docs/build.md)。
 
 ## 文档
 
-- **开始使用：** [构建和集成](docs/getting-started.md) · [示例](https://github.com/dugan-dev/MCP/tree/main/examples/mcp)
-- **配置：** [构建指南](docs/guides/build.md) · [依赖](docs/dependencies.md)
-- **接口：** [接口契约](docs/api-reference.md)
+- **开始使用：** [构建和集成](docs/getting-started.md) · [示例](https://github.com/dugan-dev/MCP/tree/main/examples)
+- **配置：** [构建指南](docs/build.md) · [依赖](docs/dependencies.md)
+- **接口：** [接口契约](docs/api-reference.md) · [功能示例](docs/features.md)
 - **设计：** [架构与模块](docs/architecture.md)
 - **兼容性：** [协议与 SDK](docs/compatibility.md)
-- **验证：** [测试与范围](docs/validation.md)
-- **项目：** [参与贡献](CONTRIBUTING.md) · [安全](SECURITY.md) · [更新记录](CHANGELOG.md)
+- **验证：** [测试与范围](docs/validation.md) · [官方一致性测试](docs/conformance.md)
+- **项目：** [参与贡献](CONTRIBUTING.md) · [安全](SECURITY.md) · [更新记录](https://github.com/dugan-dev/MCP/releases)
 
 ## 许可证
 
-[MIT](LICENSE)。代码来源与第三方声明保留在 [NOTICE](NOTICE) 和 [PROVENANCE.md](PROVENANCE.md) 中。
+[MIT](LICENSE)。代码来源与第三方声明保留在 [NOTICE](NOTICE) 中。

@@ -9,13 +9,19 @@ class LocalTransport final : public Transport {
     return server_.dispatch(request, options.stop, std::move(notify));
   }
   void close() noexcept override {}
+
  private:
   Server& server_;
 };
 int main() {
+  OAuthTransportOptions authentication;
+  authentication.http.url = "http://127.0.0.1:1/mcp";
+  authentication.oauth.redirect_uri = "http://127.0.0.1/callback";
+  OAuthTransport authenticated_transport(authentication);
+  authenticated_transport.close();
   Server server;
   server.add_tool({"echo", "Installed package roundtrip", {{"type", "object"}}},
-    [](const Json& args, RequestContext&) { return text_result(args.at("message").get<std::string>()); });
+                  [](const Json& args, RequestContext&) { return text_result(args.at("message").get<std::string>()); });
   Client client(std::make_shared<LocalTransport>(server));
   const auto result = client.call_tool("echo", {{"message", "installed MCP consumer passed"}});
   std::cout << serialize_json(result) << '\n';

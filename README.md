@@ -1,6 +1,6 @@
 # MCP
 
-[![Build](https://github.com/dugan-dev/MCP/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/dugan-dev/MCP/actions/workflows/build.yml?query=branch%3Amain) [![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](CHANGELOG.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/std/the-standard) [![CMake](https://img.shields.io/badge/CMake-3.25%2B-green.svg)](https://cmake.org/) [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#platforms)
+[![Build](https://github.com/dugan-dev/MCP/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/dugan-dev/MCP/actions/workflows/build.yml?query=branch%3Amain) [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/dugan-dev/MCP/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/std/the-standard) [![CMake](https://img.shields.io/badge/CMake-3.25%2B-green.svg)](https://cmake.org/) [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#platforms)
 
 A modern C++20 client and server library for the Model Context Protocol, with stdio and HTTP transports.
 
@@ -29,7 +29,7 @@ A modern C++20 client and server library for the Model Context Protocol, with st
 - **🧠 Unified memory**: UniMemory-backed JSON allocation.
 - **📦 Simple integration**: One include, `<mcp/all.h>`, and one target, `MCP::MCP`.
 
-Version **0.0.1** implements protocol **2026-07-28**. Legacy `initialize` sessions are not supported. [Compatibility →](docs/compatibility.md)
+Version **1.0.0** implements protocol **2026-07-28**. Legacy `initialize` sessions are not supported. [Compatibility →](docs/compatibility.md)
 
 ## Quick Start
 
@@ -42,12 +42,9 @@ Save as `main.cpp`. This server exposes a tool named `hello`:
 #include <iostream>
 
 int main() {
-    mcp::Server server;
-    server.add_tool({"hello", "Say hello"},
-        [](const mcp::Json&, mcp::RequestContext&) {
-            return mcp::text_result("Hello, MCP!");
-        });
-    mcp::run_stdio(server, std::cin, std::cout);
+  mcp::Server server;
+  server.add_tool({"hello", "Say hello"}, [](const mcp::Json&, mcp::RequestContext&) { return mcp::text_result("Hello, MCP!"); });
+  mcp::run_stdio(server, std::cin, std::cout);
 }
 ```
 
@@ -58,14 +55,8 @@ Stdout carries protocol messages; write logs to stderr. Add the following tool, 
 Declare an input schema and return a text result:
 
 ```cpp
-server.add_tool(
-    {"echo", "Return a message",
-     {{"type", "object"},
-      {"properties", {{"message", {{"type", "string"}}}}},
-      {"required", {"message"}}}},
-    [](const mcp::Json& args, mcp::RequestContext&) {
-        return mcp::text_result(mcp::text(args["message"]));
-    });
+server.add_tool({"echo", "Return a message", {{"type", "object"}, {"properties", {{"message", {{"type", "string"}}}}}, {"required", {"message"}}}},
+                [](const mcp::Json& args, mcp::RequestContext&) { return mcp::text_result(mcp::text(args["message"])); });
 ```
 
 ### Resources
@@ -73,11 +64,8 @@ server.add_tool(
 Expose content through a URI:
 
 ```cpp
-server.add_resource(
-    {"example://hello", "hello", "Greeting", "text/plain"},
-    [](const mcp::Json&, mcp::RequestContext&) {
-        return mcp::text_resource("example://hello", "Hello, MCP!");
-    });
+server.add_resource({"example://hello", "hello", "Greeting", "text/plain"},
+                    [](const mcp::Json&, mcp::RequestContext&) { return mcp::text_resource("example://hello", "Hello, MCP!"); });
 ```
 
 ### Prompts
@@ -85,12 +73,8 @@ server.add_resource(
 Create a reusable prompt with a required argument:
 
 ```cpp
-server.add_prompt(
-    {"greet", "Generate a greeting",
-     mcp::Json::array({{{"name", "name"}, {"required", true}}})},
-    [](const mcp::Json& args, mcp::RequestContext&) {
-        return mcp::prompt_result("Hello, " + std::string(mcp::text(args["name"])));
-    });
+server.add_prompt({"greet", "Generate a greeting", mcp::Json::array({{{"name", "name"}, {"required", true}}})},
+                  [](const mcp::Json& args, mcp::RequestContext&) { return mcp::prompt_result("Hello, " + std::string(mcp::text(args["name"]))); });
 ```
 
 ### Client
@@ -138,8 +122,7 @@ listener.stop();
 Use an HTTP transport instead of a subprocess. The client API stays the same:
 
 ```cpp
-auto transport = std::make_shared<mcp::HttpTransport>(
-    mcp::HttpClientOptions{"http://127.0.0.1:8080/mcp"});
+auto transport = std::make_shared<mcp::HttpTransport>(mcp::HttpClientOptions{"http://127.0.0.1:8080/mcp"});
 mcp::Client client(transport);
 
 auto info = client.discover();
@@ -180,7 +163,7 @@ mcp --help
 | --- | --- | --- |
 | Windows x64 | MSVC | Local Debug and Release |
 | Linux x64 | GCC / Clang | Local GCC Release |
-| macOS | Apple Clang | CI matrix; see the Build badge |
+| macOS | Apple Clang (Xcode 26+) | CI matrix; see the Build badge |
 | Android / iOS | — | Not device-validated |
 
 CI covers static/shared libraries and Debug/Release. [Executed checks →](docs/validation.md)
@@ -199,13 +182,15 @@ Optional extensions require matching peer support; applications supply tool logi
 
 ## Performance
 
-HTTP connection reuse, concurrent requests and bounded buffers, with UniMemory-backed allocation. [Validation and stress tests](docs/validation.md) are available; comparative benchmarks have not been published.
+HTTP connection reuse, concurrent requests and bounded buffers, with UniMemory-backed allocation. See [performance measurements](docs/performance.md) and [validation](docs/validation.md). Cross-SDK benchmark results have not been published.
 
 ## Build and Install
 
 Requires **C++20**, **CMake 3.25+** and **vcpkg**. Set `VCPKG_ROOT` to your vcpkg checkout, then run from the source directory:
 
 ```sh
+git clone --recurse-submodules https://github.com/dugan-dev/MCP.git
+cd MCP
 cmake --preset release
 cmake --build --preset release
 cmake --install build/MCP-release --config Release
@@ -221,23 +206,23 @@ Link MCP in your project's `CMakeLists.txt`:
 cmake_minimum_required(VERSION 3.25)
 project(HelloMCP LANGUAGES CXX)
 
-find_package(MCP 0.0.1 CONFIG REQUIRED)
+find_package(MCP 1.0.0 CONFIG REQUIRED)
 add_executable(hello main.cpp)
 target_link_libraries(hello PRIVATE MCP::MCP)
 ```
 
-Set `CMAKE_PREFIX_PATH` to the MCP installation and use the matching dependency toolchain. See the [build guide](docs/guides/build.md) for configuration and runtime deployment.
+Set `CMAKE_PREFIX_PATH` to the MCP installation and use the matching dependency toolchain. See the [build guide](docs/build.md) for configuration and runtime deployment.
 
 ## Documentation
 
-- **Getting started:** [Build and integrate](docs/getting-started.md) · [Examples](https://github.com/dugan-dev/MCP/tree/main/examples/mcp)
-- **Configuration:** [Build guide](docs/guides/build.md) · [Dependencies](docs/dependencies.md)
-- **Interfaces:** [API contract](docs/api-reference.md)
+- **Getting started:** [Build and integrate](docs/getting-started.md) · [Examples](https://github.com/dugan-dev/MCP/tree/main/examples)
+- **Configuration:** [Build guide](docs/build.md) · [Dependencies](docs/dependencies.md)
+- **Interfaces:** [API contract](docs/api-reference.md) · [Feature examples](docs/features.md)
 - **Design:** [Architecture and modules](docs/architecture.md)
 - **Compatibility:** [Protocol and SDKs](docs/compatibility.md)
-- **Validation:** [Tests and scope](docs/validation.md)
-- **Project:** [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+- **Validation:** [Tests and scope](docs/validation.md) · [Official conformance](docs/conformance.md)
+- **Project:** [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](https://github.com/dugan-dev/MCP/releases)
 
 ## License
 
-[MIT](LICENSE). Source attribution and third-party terms are retained in [NOTICE](NOTICE) and [PROVENANCE.md](PROVENANCE.md).
+[MIT](LICENSE). Source attribution and third-party terms are retained in [NOTICE](NOTICE).

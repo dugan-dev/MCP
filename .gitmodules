@@ -1,0 +1,3 @@
+[submodule "external/unimemory"]
+	path = external/unimemory
+	url = https://github.com/dugan-dev/UniMemory.git

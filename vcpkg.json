@@ -1,1 +1,38 @@
-{"name":"mcp","version-string":"0.0.1","license":"MIT","builtin-baseline":"2f1d605400c8727cc00c15797aba796c88ccd523","dependencies":[{"name":"boost-asio","default-features":false},"boost-beast","boost-process","curl","openssl","nlohmann-json","jsoncons"],"features":{"tests":{"description":"Retained GoogleTest suite","dependencies":["gtest"]},"mimalloc":{"description":"Existing optional allocator","dependencies":["mimalloc"]},"jemalloc":{"description":"Existing optional allocator","dependencies":["jemalloc"]}}}
+{
+  "name": "mcp",
+  "version-string": "1.0.0",
+  "license": "MIT",
+  "builtin-baseline": "2f1d605400c8727cc00c15797aba796c88ccd523",
+  "dependencies": [
+    {
+      "name": "boost-asio",
+      "default-features": false
+    },
+    "boost-beast",
+    "boost-process",
+    "curl",
+    "openssl",
+    "nlohmann-json",
+    "jsoncons"
+  ],
+  "features": {
+    "tests": {
+      "description": "Retained GoogleTest suite",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "mimalloc": {
+      "description": "Existing optional allocator",
+      "dependencies": [
+        "mimalloc"
+      ]
+    },
+    "jemalloc": {
+      "description": "Existing optional allocator",
+      "dependencies": [
+        "jemalloc"
+      ]
+    }
+  }
+}

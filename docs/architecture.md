@@ -25,7 +25,7 @@ flowchart TB
     STDIO --> FS[std::filesystem]
 ```
 
-Arrows show use, not separate binary dependencies. Version 0.0.1 installs one library, `MCP::MCP`; individual headers allow selective inclusion. Optional feature classes do not require applications to use tasks, authentication or the CLI.
+Arrows show use, not separate binary dependencies. The package installs one library, `MCP::MCP`; individual headers allow selective inclusion. Optional feature classes do not require applications to use tasks, authentication or the CLI.
 
 ## Responsibilities
 
@@ -62,10 +62,12 @@ Boost.Process is compiled with `BOOST_PROCESS_USE_STD_FS=ON`. The local vcpkg ov
 ```text
 MCP/
 ├── include/mcp/           Public interface; all.h is the umbrella header
-├── src/mcp/               Private implementation
+├── src/                   Private implementation
 ├── cli/                   mcp command-line application
-├── examples/mcp/          Complete stdio and HTTP applications
+├── examples/              Complete stdio and HTTP applications
 ├── tests/                 Unit, transport, stress, interop and package tests
+├── benchmarks/            Informational measurements; separate from CTest
+├── tools/                 Repository metadata, documentation and formatting checks
 ├── cmake/                 Dependency, export and runtime installation helpers
 ├── ports/                 Boost.Process std::filesystem build profile
 ├── external/unimemory/    Pinned official fallback source and license
@@ -74,4 +76,6 @@ MCP/
 └── .github/               Cross-platform CI and contribution templates
 ```
 
-Generated builds, downloaded SDKs and research work stay under ignored `build/` and are not release sources.
+Generated builds and downloaded SDKs stay under ignored `build/`. Review reports and exploratory data are not release sources.
+
+Internal PMR aliases live in `src/containers.h`; they do not change the public value types or select a resource automatically. JSON owns its selected allocation resource, while ordinary containers and escaping smart-pointer control blocks retain their documented allocation/lifetime contracts. Changes to allocation policy require measurements and lifetime tests rather than a blanket type replacement.

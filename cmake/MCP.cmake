@@ -16,13 +16,22 @@ find_package(jsoncons CONFIG QUIET)
 if(NOT TARGET jsoncons::jsoncons)
     find_path(MCP_JSONCONS_INCLUDE_DIR jsoncons_ext/jsonschema/jsonschema.hpp REQUIRED)
 endif()
-add_library(lib_mcp src/mcp/json.cpp src/mcp/protocol.cpp src/mcp/schema.cpp src/mcp/server.cpp src/mcp/client.cpp
-    src/mcp/sse.cpp src/mcp/notification.cpp src/mcp/http_headers.cpp src/mcp/http_client.cpp src/mcp/http_server.cpp src/mcp/stdio.cpp src/mcp/auth.cpp src/mcp/features.cpp src/mcp/extensions.cpp)
+add_library(lib_mcp src/json.cpp src/protocol.cpp src/schema.cpp src/server.cpp src/client.cpp
+    src/oauth_transport.cpp
+    src/sse.cpp src/notification.cpp src/http_headers.cpp src/http_client.cpp src/http_server.cpp src/stdio.cpp src/auth.cpp src/features.cpp src/extensions.cpp)
 set_target_properties(lib_mcp PROPERTIES OUTPUT_NAME MCP FOLDER "Libraries")
 add_library(MCP::MCP ALIAS lib_mcp)
+if(MCP_CLANG_TIDY)
+    if(NOT CMAKE_GENERATOR MATCHES "Ninja|Makefiles")
+        message(FATAL_ERROR "MCP_CLANG_TIDY requires a Ninja or Makefile generator")
+    endif()
+    find_program(MCP_CLANG_TIDY_EXECUTABLE NAMES clang-tidy REQUIRED)
+    set_property(TARGET lib_mcp PROPERTY CXX_CLANG_TIDY
+        "${MCP_CLANG_TIDY_EXECUTABLE};--checks=-*,clang-analyzer-*;--warnings-as-errors=clang-analyzer-*;--header-filter=${PROJECT_SOURCE_DIR}/(src|include/mcp)/")
+endif()
 target_compile_features(lib_mcp PUBLIC cxx_std_20)
 target_include_directories(lib_mcp PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> PRIVATE ${PROJECT_SOURCE_DIR}/src/mcp ${MCP_JSONCONS_INCLUDE_DIR})
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> PRIVATE ${PROJECT_SOURCE_DIR}/src ${MCP_JSONCONS_INCLUDE_DIR})
 target_link_libraries(lib_mcp PUBLIC UniMemory::UniMemory nlohmann_json::nlohmann_json
     PRIVATE CURL::libcurl OpenSSL::SSL OpenSSL::Crypto Boost::asio Boost::beast Boost::process Threads::Threads)
 if(TARGET jsoncons::jsoncons)

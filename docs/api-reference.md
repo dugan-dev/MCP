@@ -66,8 +66,18 @@ The application supplies trusted identity attributes to dispatch and subscriptio
 
 Authorization helpers support discovery, issuer/audience, expiry and scope checks. The configured verifier still has to verify signatures or introspect tokens appropriately. MCP is not an identity provider, secret vault or general JWT signature engine. Keep TLS verification enabled and choose exposure/origin/host policy deliberately.
 
+## Automatic HTTP authorization
+
+`OAuthTransport` composes the HTTP transport and `OAuthClient`. Set `OAuthTransportOptions::http.url`, the redirect URI, and an authorization callback returning the actual callback parameters. The transport bounds authorization retries (default two), preserves the request deadline across metadata/token requests, validates issuer/state/resource binding, selects advertised token authentication and handles scope escalation. Token refresh uses the same resource-bound OAuth client. Concurrent unauthenticated requests share an authorization gate; ordinary authenticated exchanges and notification callbacks do not hold that gate.
+
+The callback is application code and must implement its own cancellation while waiting for the user. Closing the transport closes its active HTTP transport; a user callback that ignores its `RequestOptions` cannot be forcibly interrupted. Token persistence, redirect handling, client registration policy and token verification remain application responsibilities. Pre-registered credentials require `credential_issuer`; the automatic transport rejects unbound credentials before any network request. Authorization callbacks must not recursively issue MCP requests on the same transport: that is rejected with `AuthError("reentrant_authorization", ...)`, while ordinary notification callback reentry remains supported.
+
+Plain `HttpTransport` retains its existing HTTP error behavior. Opting into `HttpClientOptions::capture_authorization_challenges` exposes 401/403 status and headers through `HttpAuthorizationError`; `OAuthTransport` enables this internally. It does not disable TLS verification or follow authorization redirects automatically. `AuthResponse::headers` contains lowercase response header names, including redirect locations.
+
+The complete examples are `examples/oauth_client.cpp` and the native automatic-authorization regressions. Rebuild consumers after changes to public aggregate layouts; this source update does not imply an ABI-compatible replacement for a prebuilt 0.0.1 binary.
+
 ## Compatibility policy
 
-The documented headers and target above form the source interface. Patch releases in the 0.0 series are intended to preserve documented names, signatures and valid usage. Fixes can reject invalid input previously accepted. Breaking public changes require an explicit version change and migration guidance.
+The documented headers and target above form the source interface. Patch and minor releases in the 1.x series are intended to preserve documented names, signatures and valid usage. Fixes can reject invalid input previously accepted. Breaking public changes require an explicit version change and migration guidance.
 
-Binary ABI stability is **not** promised by 0.0.1: public STL types, JSON templates, aggregate layouts and virtual interfaces depend on the toolchain and dependencies. Rebuild consumers when these change. `src/`, `mcp::detail` and internal CMake helper functions are not public interfaces.
+Binary ABI stability across toolchains and dependency changes is **not** promised: public STL types, JSON templates, aggregate layouts and virtual interfaces depend on the toolchain and dependencies. Rebuild consumers when these change. `src/`, `mcp::detail` and internal CMake helper functions are not public interfaces.

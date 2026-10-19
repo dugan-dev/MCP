@@ -1,26 +1,20 @@
 # Getting started
 
-Build and install using the [build guide](guides/build.md). A native application includes `<mcp/all.h>` and links `MCP::MCP`.
+Build and install using the [build guide](build.md). A native application includes `<mcp/all.h>` and links `MCP::MCP`.
 
 ## Expose a local tool
 
-The shipped [`mcp_stdio_server`](https://github.com/dugan-dev/MCP/blob/main/examples/mcp/stdio_server.cpp) registers echo/add tools, a resource and a prompt. Its registration code is in [`server_setup.h`](https://github.com/dugan-dev/MCP/blob/main/examples/mcp/server_setup.h). A minimal echo server follows the same pattern:
+The shipped [`mcp_stdio_server`](https://github.com/dugan-dev/MCP/blob/main/examples/stdio_server.cpp) registers echo/add tools, a resource and a prompt. Its registration code is in [`server_setup.h`](https://github.com/dugan-dev/MCP/blob/main/examples/server_setup.h). A minimal echo server follows the same pattern:
 
 ```cpp
 #include <mcp/all.h>
 #include <iostream>
 
 int main() {
-    mcp::Server server;
-    server.add_tool(
-        {"echo", "Return a message",
-         {{"type", "object"},
-          {"properties", {{"message", {{"type", "string"}}}}},
-          {"required", {"message"}}}},
-        [](const mcp::Json& args, mcp::RequestContext&) {
-            return mcp::text_result(mcp::text(args["message"]));
-        });
-    mcp::run_stdio(server, std::cin, std::cout);
+  mcp::Server server;
+  server.add_tool({"echo", "Return a message", {{"type", "object"}, {"properties", {{"message", {{"type", "string"}}}}}, {"required", {"message"}}}},
+                  [](const mcp::Json& args, mcp::RequestContext&) { return mcp::text_result(mcp::text(args["message"])); });
+  mcp::run_stdio(server, std::cin, std::cout);
 }
 ```
 
@@ -38,9 +32,9 @@ auto result = client.call_tool("echo", {{"message", "Hello, MCP!"}});
 client.close();
 ```
 
-Use an absolute executable path. Configure `arguments`, `working_directory`, `environment` and `inherit_environment` explicitly where needed. Strings are UTF-8; embedded NULs are rejected. `close()` wakes pending operations and cleans up the owned subprocess tree. The [complete client example](https://github.com/dugan-dev/MCP/blob/main/examples/mcp/stdio_client.cpp) includes error handling.
+Use an absolute executable path. Configure `arguments`, `working_directory`, `environment` and `inherit_environment` explicitly where needed. Strings are UTF-8; embedded NULs are rejected. `close()` wakes pending operations and cleans up the owned subprocess tree. The [complete client example](https://github.com/dugan-dev/MCP/blob/main/examples/stdio_client.cpp) includes error handling.
 
-For HTTP, construct `HttpTransport` from `HttpClientOptions` with its `url`; the `Client` API is unchanged. [`http_server.cpp`](https://github.com/dugan-dev/MCP/blob/main/examples/mcp/http_server.cpp) and [`http_client.cpp`](https://github.com/dugan-dev/MCP/blob/main/examples/mcp/http_client.cpp) provide runnable examples. `HttpServer` borrows its `Server`; stop the HTTP server before destroying the server. TLS and authentication are deployment choices, not automatically established by a loopback example.
+For HTTP, construct `HttpTransport` from `HttpClientOptions` with its `url`; the `Client` API is unchanged. [`http_server.cpp`](https://github.com/dugan-dev/MCP/blob/main/examples/http_server.cpp) and [`http_client.cpp`](https://github.com/dugan-dev/MCP/blob/main/examples/http_client.cpp) provide runnable examples. `HttpServer` borrows its `Server`; stop the HTTP server before destroying the server. TLS and authentication are deployment choices, not automatically established by a loopback example.
 
 ## Use the CLI
 

@@ -1,6 +1,0 @@
-foreach(example IN ITEMS stdio_server http_server http_client stdio_client)
-    add_executable(example_${example} ${example}.cpp)
-    set_target_properties(example_${example} PROPERTIES OUTPUT_NAME mcp_${example} FOLDER "Examples")
-    target_link_libraries(example_${example} PRIVATE MCP::MCP)
-endforeach()
-mcp_stage_runtime()
